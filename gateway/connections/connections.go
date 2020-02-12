@@ -205,7 +205,7 @@ func (s *TargetState) handleUpdate(msg proto.Message) error {
 			v.Update.Prefix.Target = s.name
 		}
 		if err := s.rejectUpdate(v.Update); err != nil {
-			s.config.Log.Warn().Msgf("Update rejected: %s: %+v", err, v.Update)
+			//s.config.Log.Warn().Msgf("Update rejected: %s: %+v", err, v.Update)
 			return nil
 		}
 		err := s.targetCache.GnmiUpdate(v.Update)

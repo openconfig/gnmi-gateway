@@ -10,6 +10,7 @@ import (
 	"os"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/server"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/targets"
 	"time"
@@ -17,8 +18,9 @@ import (
 
 // Command line parameters
 var (
-	enableServer bool
-	printVersion bool
+	enableServer     bool
+	enablePrometheus bool
+	printVersion     bool
 )
 
 var (
@@ -55,13 +57,20 @@ func main() {
 		}()
 	}
 
+	if enablePrometheus {
+		config.Log.Info().Msg("Starting Prometheus exporter.")
+		prometheusExporter := exporters.NewPrometheusExporter(config, connMgr.Cache())
+		prometheusExporter.Start()
+	}
+
 	config.Log.Info().Msg("Running.")
 	select {} // block forever
 }
 
 func parseArgs(config *gateway.GatewayConfig) {
 	// Execution parameters
-	flag.BoolVar(&enableServer, "enableServer", false, "Connect to targets.")
+	flag.BoolVar(&enableServer, "enableServer", false, "Enable the gNMI server.")
+	flag.BoolVar(&enablePrometheus, "enablePrometheus", false, "Enable the Prometheus exporter.")
 	flag.BoolVar(&printVersion, "version", false, "Print version and exit.")
 
 	// Configuration Parameters
