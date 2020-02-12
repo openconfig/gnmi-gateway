@@ -6,6 +6,7 @@ package connections
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/openconfig/gnmi/cache"
@@ -83,6 +84,7 @@ func (c *ConnectionManager) ReloadTargets() {
 					// no previous targetCache existed
 					c.config.Log.Info().Msgf("Initializing connection for %s.", name)
 					newTargets[name] = &TargetState{
+						config:      c.config,
 						name:        name,
 						targetCache: c.cache.Add(name),
 						ctx:         context.Background(),
@@ -160,6 +162,7 @@ func targetConfigChanged(target *targetpb.Target, currentState *TargetState) boo
 // Container for some of the targetCache TargetState data. It is created once
 // for every device and used as a closure parameter by ProtoHandler.
 type TargetState struct {
+	config      *gateway.GatewayConfig
 	name        string
 	targetCache *cache.Target
 	// connected status is set to true when the first gnmi notification is received.
@@ -173,7 +176,7 @@ type TargetState struct {
 
 func (s *TargetState) disconnect() {
 	s.connected = false
-	//s.targetCache.Disconnect()
+	s.targetCache.Disconnect()
 	s.targetCache.Reset()
 }
 
@@ -182,6 +185,7 @@ func (s *TargetState) disconnect() {
 // cache.Target is called to generate an update. If the message is a sync_response, then targetCache is
 // marked as synchronised.
 func (s *TargetState) handleUpdate(msg proto.Message) error {
+	//fmt.Printf("%+v\n", msg)
 	if !s.connected {
 		s.targetCache.Connect()
 		s.connected = true
@@ -200,15 +204,37 @@ func (s *TargetState) handleUpdate(msg proto.Message) error {
 		if v.Update.Prefix.Target == "" {
 			v.Update.Prefix.Target = s.name
 		}
-		if err := s.targetCache.GnmiUpdate(v.Update); err != nil {
-			return fmt.Errorf("targetCache cache update error: %s", err)
+		if err := s.rejectUpdate(v.Update); err != nil {
+			s.config.Log.Warn().Msgf("Update rejected: %s: %+v", err, v.Update)
+			return nil
+		}
+		err := s.targetCache.GnmiUpdate(v.Update)
+		if err != nil {
+			return fmt.Errorf("targetCache cache update error: %s: %+v", err, v.Update)
 		}
 	case *gnmipb.SubscribeResponse_SyncResponse:
+		s.config.Log.Debug().Msgf("Target is synced: %s", s.name)
 		s.targetCache.Sync()
 	case *gnmipb.SubscribeResponse_Error:
 		return fmt.Errorf("error in response: %s", v)
 	default:
 		return fmt.Errorf("unknown response %T: %s", v, v)
+	}
+	return nil
+}
+
+func (s *TargetState) rejectUpdate(notification *gnmipb.Notification) error {
+	for _, update := range notification.GetUpdate() {
+		path := update.GetPath().GetElem()
+		if len(path) >= 2 {
+			if path[0].Name == "interfaces" && path[1].Name == "interface" {
+				if value, exists := path[1].Key["name"]; exists {
+					if value == "interface" {
+						return errors.New("bug for Arista interface path") // Arista BUG #??????????
+					}
+				}
+			}
+		}
 	}
 	return nil
 }
