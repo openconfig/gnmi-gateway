@@ -1,5 +1,5 @@
 // Copyright 2020 Netflix Inc
-// Author: Colin McIntosh
+// Author: Colin McIntosh (colin@netflix.com)
 
 package connections
 
@@ -16,13 +16,14 @@ import (
 	targetlib "github.com/openconfig/gnmi/target"
 	"github.com/rs/zerolog/log"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway"
+	"sync"
 )
 
 func NewConnectionManagerDefault(config *gateway.GatewayConfig) (*ConnectionManager, error) {
-	mgr := ConnectionManager{config: config}
-
-	if err := targetlib.Validate(mgr.config.TargetConfigurations); err != nil {
-		return nil, fmt.Errorf("configuration is invalid: %v", err)
+	mgr := ConnectionManager{
+		config:            config,
+		targets:           make(map[string]*TargetState),
+		targetsConfigChan: make(chan *targetpb.Configuration, 1),
 	}
 
 	// Setup the cache
@@ -30,88 +31,159 @@ func NewConnectionManagerDefault(config *gateway.GatewayConfig) (*ConnectionMana
 	mgr.cache = cache.New(nil)
 
 	// TODO: Remove or enable these. Not sure what they do currently.
-	// Start functions to periodically update metadata stored in the cache for each target.
+	// Start functions to periodically update metadata stored in the cache for each targetCache.
 	//go periodic(*metadataUpdatePeriod, mgr.cache.UpdateMetadata)
 	//go periodic(*sizeUpdatePeriod, mgr.cache.UpdateSize)
 	return &mgr, nil
 }
 
 type ConnectionManager struct {
-	cache  *cache.Cache
-	config *gateway.GatewayConfig
+	cache             *cache.Cache
+	config            *gateway.GatewayConfig
+	targets           map[string]*TargetState
+	targetsMutex      sync.Mutex
+	targetsConfigChan chan *targetpb.Configuration
 }
 
 func (c *ConnectionManager) Cache() *cache.Cache {
 	return c.cache
 }
 
-func (c *ConnectionManager) Start() {
-	ctx := context.Background()
-	for name, target := range c.config.TargetConfigurations.Target {
-		c.config.Log.Info().Msgf("Initializing connection for %s.", name)
-		go func(name string, target *targetpb.Target) {
-			targetState := &TargetState{name: name, target: c.cache.Add(name)}
+func (c *ConnectionManager) TargetConfigChan() chan *targetpb.Configuration {
+	return c.targetsConfigChan
+}
 
-			request := c.config.TargetConfigurations.Request[target.Request]
-			query, err := client.NewQuery(request)
-			if err != nil {
-				log.Error().Msgf("NewQuery(%s): %v", request.String(), err)
-				return
+// Receives TargetConfiguration from the TargetConfigChan and connects/reconnects to targets.
+func (c *ConnectionManager) ReloadTargets() {
+	for {
+		select {
+		case targetConfig := <-c.targetsConfigChan:
+			log.Info().Msg("Connection manager received a Target Configuration")
+			if err := targetlib.Validate(targetConfig); err != nil {
+				c.config.Log.Error().Err(err).Msgf("configuration is invalid: %v", err)
 			}
-			query.Addrs = target.Addresses
 
-			if target.Credentials != nil {
-				query.Credentials = &client.Credentials{
-					Username: target.Credentials.Username,
-					Password: target.Credentials.Password,
+			newTargets := make(map[string]*TargetState)
+			for name, target := range targetConfig.Target {
+				if currentTargetState, exists := c.targets[name]; exists {
+					// previous target exists
+					newTargets[name] = currentTargetState
+					if targetConfigChanged(target, newTargets[name]) {
+						// target is different
+						c.config.Log.Info().Msgf("Updating connection for %s.", name)
+						err := newTargets[name].client.Close() // this will disconnect and reset the cache via the disconnect callback
+						if err != nil {
+							c.config.Log.Error().Err(err).Msgf("Error closing connection for %s", name)
+						}
+						newTargets[name].target = target
+						newTargets[name].request = targetConfig.Request[target.Request]
+						go c.connectToTarget(newTargets[name])
+					}
+				} else {
+					// no previous targetCache existed
+					c.config.Log.Info().Msgf("Initializing connection for %s.", name)
+					newTargets[name] = &TargetState{
+						name:        name,
+						targetCache: c.cache.Add(name),
+						ctx:         context.Background(),
+						target:      target,
+						request:     targetConfig.Request[target.Request],
+					}
+					go c.connectToTarget(newTargets[name])
 				}
 			}
-
-			// TLS is always enabled for a target.
-			query.TLS = &tls.Config{
-				// Today, we assume that we should not verify the certificate from the target.
-				InsecureSkipVerify: true,
-			}
-
-			query.Target = name
-			query.Timeout = c.config.TargetDialTimeout
-
-			query.ProtoHandler = targetState.handleUpdate
-
-			if err := query.Validate(); err != nil {
-				log.Error().Err(err).Msgf("query.Validate(): %v", err)
-				return
-			}
-			cl := client.Reconnect(&client.BaseClient{}, targetState.disconnect, nil)
-			if err := cl.Subscribe(ctx, query, gnmiclient.Type); err != nil {
-				log.Error().Err(err).Msgf("Subscribe failed for target %q: %v", name, err)
-			}
-		}(name, target)
+			c.targetsMutex.Lock()
+			c.targets = newTargets
+			c.targetsMutex.Unlock()
+		}
 	}
 }
 
-// Container for some of the target TargetState data. It is created once
+func (c *ConnectionManager) connectToTarget(targetState *TargetState) {
+	query, err := client.NewQuery(targetState.request)
+	if err != nil {
+		log.Error().Msgf("NewQuery(%s): %v", targetState.request.String(), err)
+		return
+	}
+	query.Addrs = targetState.target.Addresses
+
+	if targetState.target.Credentials != nil {
+		query.Credentials = &client.Credentials{
+			Username: targetState.target.Credentials.Username,
+			Password: targetState.target.Credentials.Password,
+		}
+	}
+
+	// TLS is always enabled for a targetCache.
+	query.TLS = &tls.Config{
+		// Today, we assume that we should not verify the certificate from the targetCache.
+		InsecureSkipVerify: true,
+	}
+
+	query.Target = targetState.name
+	query.Timeout = c.config.TargetDialTimeout
+
+	query.ProtoHandler = targetState.handleUpdate
+
+	if err := query.Validate(); err != nil {
+		log.Error().Err(err).Msgf("query.Validate(): %v", err)
+		return
+	}
+	targetState.client = client.Reconnect(&client.BaseClient{}, targetState.disconnect, nil)
+	if err := targetState.client.Subscribe(targetState.ctx, query, gnmiclient.Type); err != nil {
+		log.Error().Err(err).Msgf("Subscribe failed for targetCache %q: %v", targetState.name, err)
+	}
+}
+
+func (c *ConnectionManager) Start() {
+	go c.ReloadTargets()
+}
+
+func targetConfigChanged(target *targetpb.Target, currentState *TargetState) bool {
+	if len(currentState.target.Addresses) != len(target.Addresses) {
+		return true
+	}
+	for i, addr := range currentState.target.Addresses {
+		if target.Addresses[i] != addr {
+			return true
+		}
+	}
+	if currentState.target.Credentials.Username != target.Credentials.Username {
+		return true
+	}
+	if currentState.target.Credentials.Password != target.Credentials.Password {
+		return true
+	}
+	return false
+}
+
+// Container for some of the targetCache TargetState data. It is created once
 // for every device and used as a closure parameter by ProtoHandler.
 type TargetState struct {
-	name   string
-	target *cache.Target
+	name        string
+	targetCache *cache.Target
 	// connected status is set to true when the first gnmi notification is received.
 	// it gets reset to false when disconnect call back of ReconnectClient is called.
 	connected bool
+	ctx       context.Context
+	client    *client.ReconnectClient
+	target    *targetpb.Target
+	request   *gnmipb.SubscribeRequest
 }
 
 func (s *TargetState) disconnect() {
 	s.connected = false
-	s.target.Reset()
+	//s.targetCache.Disconnect()
+	s.targetCache.Reset()
 }
 
-// handleUpdate parses a protobuf message received from the target. This implementation handles only
+// handleUpdate parses a protobuf message received from the targetCache. This implementation handles only
 // gNMI SubscribeResponse messages. When the message is an Update, the GnmiUpdate method of the
-// cache.Target is called to generate an update. If the message is a sync_response, then target is
+// cache.Target is called to generate an update. If the message is a sync_response, then targetCache is
 // marked as synchronised.
 func (s *TargetState) handleUpdate(msg proto.Message) error {
 	if !s.connected {
-		s.target.Connect()
+		s.targetCache.Connect()
 		s.connected = true
 	}
 	resp, ok := msg.(*gnmipb.SubscribeResponse)
@@ -128,11 +200,11 @@ func (s *TargetState) handleUpdate(msg proto.Message) error {
 		if v.Update.Prefix.Target == "" {
 			v.Update.Prefix.Target = s.name
 		}
-		if err := s.target.GnmiUpdate(v.Update); err != nil {
-			return fmt.Errorf("target cache update error: %s", err)
+		if err := s.targetCache.GnmiUpdate(v.Update); err != nil {
+			return fmt.Errorf("targetCache cache update error: %s", err)
 		}
 	case *gnmipb.SubscribeResponse_SyncResponse:
-		s.target.Sync()
+		s.targetCache.Sync()
 	case *gnmipb.SubscribeResponse_Error:
 		return fmt.Errorf("error in response: %s", v)
 	default:

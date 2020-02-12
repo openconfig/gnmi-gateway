@@ -1,0 +1,33 @@
+{
+  "request": {
+    "default": {
+      "subscribe": {
+        "prefix": {
+        },
+        "subscription": [
+          {
+            "path": {
+              "elem": [
+                {
+                  "name": "interfaces"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "target": {
+    "es04.sjc006": {
+      "addresses": [
+        "myrouter.example.com:8888"
+      ],
+      "credentials": {
+        "username": "happy",
+        "password": "gilmore"
+      },
+      "request": "default"
+    }
+  }
+}

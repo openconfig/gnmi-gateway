@@ -1,10 +1,9 @@
 // Copyright 2020 Netflix Inc
-// Author: Colin McIntosh
+// Author: Colin McIntosh (colin@netflix.com)
 
 package gateway
 
 import (
-	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"time"
@@ -22,7 +21,9 @@ type GatewayConfig struct {
 	ServerTLSKey string
 
 	// Configs for connections to targets
-	TargetConfigurations *targetpb.Configuration
+	TargetConfigurationJSONFile string
+	// Interval to reload the target configuration JSON file.
+	TargetConfigurationJSONFileReloadInterval time.Duration
 	// Timeout for dialing the target connection
 	TargetDialTimeout time.Duration
 }
