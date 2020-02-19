@@ -59,6 +59,10 @@ func (m *JSONFileTargetLoader) GetConfiguration() (*targetpb.Configuration, erro
 	return configs, nil
 }
 
+func (m *JSONFileTargetLoader) Start() error {
+	return nil // nothing to start
+}
+
 func (m *JSONFileTargetLoader) WatchConfiguration(targetChan chan *targetpb.Configuration) {
 	for {
 		targetConfig, err := m.GetConfiguration()

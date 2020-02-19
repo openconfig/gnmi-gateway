@@ -91,29 +91,36 @@ func StartGateway(config *configuration.GatewayConfig, opts *GatewayStartOpts) e
 	config.Log.Info().Msg("Starting connection manager.")
 	connMgr.Start()
 
-	go opts.TargetLoader.WatchConfiguration(connMgr.TargetConfigChan())
-
 	// channel to listen for errors from child goroutines
 	finished := make(chan error, 1)
 
+	go func() {
+		err := opts.TargetLoader.Start()
+		if err != nil {
+			config.Log.Error().Err(err).Msgf("Unable to start target loader %T", opts.TargetLoader)
+			finished <- err
+		}
+		opts.TargetLoader.WatchConfiguration(connMgr.TargetConfigChan())
+	}()
+
 	if config.EnableGNMIServer {
 		config.Log.Info().Msg("Starting gNMI server.")
-		go func(finished chan error) {
+		go func() {
 			if err := StartServer(config, connMgr.Cache()); err != nil {
 				config.Log.Error().Err(err).Msg("Unable to start gNMI server.")
 				finished <- err
 			}
-		}(finished)
+		}()
 	}
 
 	for _, exporter := range opts.Exporters {
-		go func(finished chan error, exporter exporters.Exporter) {
+		go func(exporter exporters.Exporter) {
 			err := exporter.Start(connMgr.Cache())
 			if err != nil {
-				config.Log.Error().Err(err).Msg("Unable to start Prometheus exporter.")
+				config.Log.Error().Err(err).Msgf("Unable to start exporter %T", exporter)
 				finished <- err
 			}
-		}(finished, exporter)
+		}(exporter)
 	}
 
 	return <-finished
