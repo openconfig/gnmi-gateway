@@ -20,16 +20,14 @@ import (
 	"fmt"
 	"os"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/server"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/targets"
 	"time"
 )
 
 // Command line parameters
 var (
-	enableServer     bool
 	enablePrometheus bool
 	printVersion     bool
 )
@@ -47,44 +45,24 @@ func main() {
 	config := DefaultConfig()
 	parseArgs(config)
 
-	connMgr, err := connections.NewConnectionManagerDefault(config)
-	if err != nil {
-		config.Log.Error().Err(err).Msg("Unable to create connection manager.")
-		os.Exit(1)
-	}
-	config.Log.Info().Msg("Starting connection manager.")
-	connMgr.Start()
-
-	targetLoader := targets.NewJSONFileTargetLoader(config)
-	go targetLoader.WatchConfiguration(connMgr.TargetConfigChan())
-
-	if enableServer {
-		config.Log.Info().Msg("Starting gNMI server.")
-		go func() {
-			if err := server.StartServer(config, connMgr.Cache()); err != nil {
-				config.Log.Error().Err(err).Msg("Unable to start gNMI server.")
-				os.Exit(1)
-			}
-		}()
+	opts := &gateway.GatewayStartOpts{
+		TargetLoader: targets.NewJSONFileTargetLoader(config),
 	}
 
 	if enablePrometheus {
-		config.Log.Info().Msg("Starting Prometheus exporter.")
-		prometheusExporter := exporters.NewPrometheusExporter(config, connMgr.Cache())
-		err := prometheusExporter.Start()
-		if err != nil {
-			config.Log.Error().Err(err).Msg("Unable to start Prometheus exporter.")
-			os.Exit(1)
-		}
+		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(config))
 	}
 
-	config.Log.Info().Msg("Running.")
-	select {} // block forever
+	err := gateway.StartGateway(config, opts) // run forever (or until an error happens)
+	if err != nil {
+		config.Log.Error().Err(err).Msgf("Gateway exited with an error: %v", err)
+		os.Exit(1)
+	}
 }
 
-func parseArgs(config *gateway.GatewayConfig) {
+func parseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
-	flag.BoolVar(&enableServer, "EnableServer", false, "Enable the gNMI server.")
+	flag.BoolVar(&config.EnableGNMIServer, "EnableServer", false, "Enable the gNMI server.")
 	flag.BoolVar(&enablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter.")
 	flag.BoolVar(&printVersion, "version", false, "Print version and exit.")
 
@@ -97,7 +75,7 @@ func parseArgs(config *gateway.GatewayConfig) {
 	flag.Parse()
 }
 
-func DefaultConfig() *gateway.GatewayConfig {
-	config := gateway.NewDefaultGatewayConfig()
+func DefaultConfig() *configuration.GatewayConfig {
+	config := configuration.NewDefaultGatewayConfig()
 	return config
 }

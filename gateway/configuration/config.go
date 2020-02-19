@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package gateway
+package configuration
 
 import (
 	"github.com/rs/zerolog"
@@ -28,6 +28,8 @@ type GatewayConfig struct {
 	// OpenConfig Models 'public' folder location
 	OpenConfigModelDirectory string
 
+	// Enable GNMI Server
+	EnableGNMIServer bool
 	// Port to server the gNMI server on
 	ServerPort int
 	// gNMI Server TLS Cert

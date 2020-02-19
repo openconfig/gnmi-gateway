@@ -16,10 +16,11 @@
 package exporters
 
 import (
+	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 )
 
 type Exporter interface {
-	Start() error
+	Start(*cache.Cache) error
 	Export(leaf *ctree.Leaf)
 }

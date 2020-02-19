@@ -21,17 +21,17 @@ import (
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/target"
 	"os"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"time"
 )
 
 type JSONFileTargetLoader struct {
-	config   *gateway.GatewayConfig
+	config   *configuration.GatewayConfig
 	file     string
 	interval time.Duration
 }
 
-func NewJSONFileTargetLoader(config *gateway.GatewayConfig) TargetLoader {
+func NewJSONFileTargetLoader(config *configuration.GatewayConfig) TargetLoader {
 	return &JSONFileTargetLoader{
 		config:   config,
 		file:     config.TargetConfigurationJSONFile,
@@ -49,14 +49,14 @@ func (m *JSONFileTargetLoader) GetConfiguration() (*targetpb.Configuration, erro
 			m.config.Log.Error().Err(err).Msg("Error closing configuration file.")
 		}
 	}()
-	configuration := new(targetpb.Configuration)
-	if err := jsonpb.Unmarshal(f, configuration); err != nil {
+	configs := new(targetpb.Configuration)
+	if err := jsonpb.Unmarshal(f, configs); err != nil {
 		return nil, fmt.Errorf("could not parse configuration from %q: %v", m.file, err)
 	}
-	if err := target.Validate(configuration); err != nil {
+	if err := target.Validate(configs); err != nil {
 		return nil, fmt.Errorf("configuration in %q is invalid: %v", m.file, err)
 	}
-	return configuration, nil
+	return configs, nil
 }
 
 func (m *JSONFileTargetLoader) WatchConfiguration(targetChan chan *targetpb.Configuration) {

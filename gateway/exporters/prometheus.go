@@ -27,16 +27,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
 	"sort"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/openconfig"
 	"strings"
 	"sync"
 )
 
-func NewPrometheusExporter(config *gateway.GatewayConfig, cache *cache.Cache) Exporter {
+func NewPrometheusExporter(config *configuration.GatewayConfig) Exporter {
 	return &PrometheusExporter{
 		config:     config,
-		cache:      cache,
 		deltaCalc:  NewDeltaCalculator(),
 		metrics:    make(map[MetricHash]prometheus.Metric),
 		typeLookup: new(openconfig.TypeLookup),
@@ -44,7 +43,7 @@ func NewPrometheusExporter(config *gateway.GatewayConfig, cache *cache.Cache) Ex
 }
 
 type PrometheusExporter struct {
-	config     *gateway.GatewayConfig
+	config     *configuration.GatewayConfig
 	cache      *cache.Cache
 	deltaCalc  *DeltaCalculator
 	metrics    map[MetricHash]prometheus.Metric
@@ -97,10 +96,12 @@ func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
 	}
 }
 
-func (e *PrometheusExporter) Start() error {
+func (e *PrometheusExporter) Start(cache *cache.Cache) error {
+	e.config.Log.Info().Msg("Starting Prometheus exporter.")
 	if e.config.OpenConfigModelDirectory == "" {
 		return errors.New("value is not set for OpenConfigModelDirectory configuration")
 	}
+	e.cache = cache
 	err := e.typeLookup.LoadAllModules(e.config.OpenConfigModelDirectory)
 	if err != nil {
 		e.config.Log.Error().Err(err).Msgf("Unable to load OpenConfig modules in %s: %v", e.config.OpenConfigModelDirectory, err)

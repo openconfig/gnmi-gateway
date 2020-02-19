@@ -28,11 +28,11 @@ import (
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	targetlib "github.com/openconfig/gnmi/target"
 	"github.com/rs/zerolog/log"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"sync"
 )
 
-func NewConnectionManagerDefault(config *gateway.GatewayConfig) (*ConnectionManager, error) {
+func NewConnectionManagerDefault(config *configuration.GatewayConfig) (*ConnectionManager, error) {
 	mgr := ConnectionManager{
 		config:            config,
 		targets:           make(map[string]*TargetState),
@@ -52,7 +52,7 @@ func NewConnectionManagerDefault(config *gateway.GatewayConfig) (*ConnectionMana
 
 type ConnectionManager struct {
 	cache             *cache.Cache
-	config            *gateway.GatewayConfig
+	config            *configuration.GatewayConfig
 	targets           map[string]*TargetState
 	targetsMutex      sync.Mutex
 	targetsConfigChan chan *targetpb.Configuration
@@ -174,7 +174,7 @@ func targetConfigChanged(target *targetpb.Target, currentState *TargetState) boo
 // Container for some of the targetCache TargetState data. It is created once
 // for every device and used as a closure parameter by ProtoHandler.
 type TargetState struct {
-	config      *gateway.GatewayConfig
+	config      *configuration.GatewayConfig
 	name        string
 	targetCache *cache.Target
 	// connected status is set to true when the first gnmi notification is received.
