@@ -27,12 +27,12 @@ import (
 )
 
 var (
-	version = "0.1.0"
+	Version = "0.1.0"
 )
 
 var (
-	enablePrometheus bool
-	printVersion     bool
+	EnablePrometheus bool
+	PrintVersion     bool
 )
 
 type GatewayStartOpts struct {
@@ -43,8 +43,8 @@ type GatewayStartOpts struct {
 }
 
 func Main() {
-	if printVersion {
-		fmt.Println(fmt.Sprintf("gnmi-gateway version %s", version))
+	if PrintVersion {
+		fmt.Println(fmt.Sprintf("gnmi-gateway version %s", Version))
 		os.Exit(0)
 	}
 
@@ -55,7 +55,7 @@ func Main() {
 		TargetLoader: targets.NewJSONFileTargetLoader(config),
 	}
 
-	if enablePrometheus {
+	if EnablePrometheus {
 		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(config))
 	}
 
@@ -69,8 +69,8 @@ func Main() {
 func ParseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
 	flag.BoolVar(&config.EnableGNMIServer, "EnableServer", false, "Enable the gNMI server.")
-	flag.BoolVar(&enablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter.")
-	flag.BoolVar(&printVersion, "version", false, "Print version and exit.")
+	flag.BoolVar(&EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter.")
+	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit.")
 
 	// Configuration Parameters
 	flag.StringVar(&config.OpenConfigModelDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter).")

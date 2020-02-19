@@ -40,8 +40,8 @@ func TestMapHash(t *testing.T) {
 
 	testLabels := makeExampleLabels(2906) // randomly selected consistent seed
 
-	firstHash := exporters.NewMetricHash("test_metric", testLabels)
+	firstHash := exporters.NewStringMapHash("test_metric", testLabels)
 	for i := 0; i < 100; i++ {
-		assertions.Equal(firstHash, exporters.NewMetricHash("test_metric", testLabels), "All hashes of the testLabels should be the same.")
+		assertions.Equal(firstHash, exporters.NewStringMapHash("test_metric", testLabels), "All hashes of the testLabels should be the same.")
 	}
 }
