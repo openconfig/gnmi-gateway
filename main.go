@@ -6,7 +6,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"os"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
@@ -38,7 +37,7 @@ func main() {
 
 	connMgr, err := connections.NewConnectionManagerDefault(config)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to create connection manager.")
+		config.Log.Error().Err(err).Msg("Unable to create connection manager.")
 		os.Exit(1)
 	}
 	config.Log.Info().Msg("Starting connection manager.")
@@ -51,7 +50,7 @@ func main() {
 		config.Log.Info().Msg("Starting gNMI server.")
 		go func() {
 			if err := server.StartServer(config, connMgr.Cache()); err != nil {
-				log.Error().Err(err).Msg("Unable to start gNMI server.")
+				config.Log.Error().Err(err).Msg("Unable to start gNMI server.")
 				os.Exit(1)
 			}
 		}()
@@ -60,7 +59,11 @@ func main() {
 	if enablePrometheus {
 		config.Log.Info().Msg("Starting Prometheus exporter.")
 		prometheusExporter := exporters.NewPrometheusExporter(config, connMgr.Cache())
-		prometheusExporter.Start()
+		err := prometheusExporter.Start()
+		if err != nil {
+			config.Log.Error().Err(err).Msg("Unable to start Prometheus exporter.")
+			os.Exit(1)
+		}
 	}
 
 	config.Log.Info().Msg("Running.")
@@ -69,14 +72,15 @@ func main() {
 
 func parseArgs(config *gateway.GatewayConfig) {
 	// Execution parameters
-	flag.BoolVar(&enableServer, "enableServer", false, "Enable the gNMI server.")
-	flag.BoolVar(&enablePrometheus, "enablePrometheus", false, "Enable the Prometheus exporter.")
+	flag.BoolVar(&enableServer, "EnableServer", false, "Enable the gNMI server.")
+	flag.BoolVar(&enablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter.")
 	flag.BoolVar(&printVersion, "version", false, "Print version and exit.")
 
 	// Configuration Parameters
-	flag.StringVar(&config.TargetConfigurationJSONFile, "targetConfigFile", "targets.json", "JSON file containing the target configurations (default: targets.json).")
-	flag.DurationVar(&config.TargetConfigurationJSONFileReloadInterval, "targetConfigInterval", 10*time.Second, "Interval to reload the JSON file containing the target configurations (default: 10s)")
-	flag.DurationVar(&config.TargetDialTimeout, "targetDialTimeout", 10*time.Second, "Dial timeout time (default: 10s)")
+	flag.StringVar(&config.OpenConfigModelDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter).")
+	flag.StringVar(&config.TargetConfigurationJSONFile, "TargetConfigFile", "targets.json", "JSON file containing the target configurations (default: targets.json).")
+	flag.DurationVar(&config.TargetConfigurationJSONFileReloadInterval, "TargetConfigInterval", 10*time.Second, "Interval to reload the JSON file containing the target configurations (default: 10s)")
+	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time (default: 10s)")
 
 	flag.Parse()
 }

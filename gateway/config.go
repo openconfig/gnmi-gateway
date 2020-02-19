@@ -13,6 +13,9 @@ type GatewayConfig struct {
 	// Logger used by the Gateway code
 	Log zerolog.Logger
 
+	// OpenConfig Models 'public' folder location
+	OpenConfigModelDirectory string
+
 	// Port to server the gNMI server on
 	ServerPort int
 	// gNMI Server TLS Cert

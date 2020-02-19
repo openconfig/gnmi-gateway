@@ -4,34 +4,143 @@
 package exporters
 
 import (
+	"errors"
+	"fmt"
+	"github.com/cespare/xxhash/v2"
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/rs/zerolog/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
+	"sort"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/openconfig"
 	"strings"
+	"sync"
 )
 
 func NewPrometheusExporter(config *gateway.GatewayConfig, cache *cache.Cache) Exporter {
 	return &PrometheusExporter{
-		config: config,
-		cache:  cache,
+		config:     config,
+		cache:      cache,
+		deltaCalc:  NewDeltaCalculator(),
+		metrics:    make(map[MetricHash]prometheus.Metric),
+		typeLookup: new(openconfig.TypeLookup),
 	}
 }
 
 type PrometheusExporter struct {
-	config *gateway.GatewayConfig
-	cache  *cache.Cache
+	config     *gateway.GatewayConfig
+	cache      *cache.Cache
+	deltaCalc  *DeltaCalculator
+	metrics    map[MetricHash]prometheus.Metric
+	typeLookup *openconfig.TypeLookup
 }
+
+type MetricHash uint64
 
 func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
-	update := leaf.Value().(*gnmipb.Notification)
+	notification := leaf.Value().(*gnmipb.Notification)
+	for _, update := range notification.Update {
+		value, isNumber := GetNumberValues(update.Val)
+		if !isNumber {
+			continue
+		}
+		metricName, labels := UpdateToMetricNameAndLabels(update)
+		metricHash := NewMetricHash(metricName, labels)
 
-	UpdateToMetricNameAndTags(update)
+		metric, exists := e.metrics[metricHash]
+		if !exists {
+			var path []string
+			for _, elem := range update.Path.Elem {
+				path = append(path, elem.Name)
+			}
+			metricType := e.typeLookup.GetTypeByPath(path)
+
+			switch metricType {
+			case "counter64":
+				metric = promauto.NewCounter(prometheus.CounterOpts{
+					Name:        metricName,
+					ConstLabels: labels,
+				})
+			case "gauge32":
+			default:
+				metric = promauto.NewGauge(prometheus.GaugeOpts{
+					Name:        metricName,
+					ConstLabels: labels,
+				})
+			}
+			e.metrics[metricHash] = metric
+		}
+
+		switch m := metric.(type) {
+		case prometheus.Counter:
+			delta, _ := e.deltaCalc.Calc(metricHash, value)
+			m.Add(delta)
+		case prometheus.Gauge:
+			m.Set(value)
+		}
+	}
 }
 
-func (e *PrometheusExporter) Start() {
+func (e *PrometheusExporter) Start() error {
+	if e.config.OpenConfigModelDirectory == "" {
+		return errors.New("value is not set for OpenConfigModelDirectory configuration")
+	}
+	err := e.typeLookup.LoadAllModules(e.config.OpenConfigModelDirectory)
+	if err != nil {
+		e.config.Log.Error().Err(err).Msgf("Unable to load OpenConfig modules in %s: %v", e.config.OpenConfigModelDirectory, err)
+		return err
+	}
+
+	e.config.Log.Info().Msg("Starting Prometheus exporter.")
 	e.cache.SetClient(e.Export)
+	go e.runHttpServer()
+	return nil
+}
+
+func (e *PrometheusExporter) runHttpServer() {
+	var errCount = 0
+	var lastError error
+	for {
+		e.config.Log.Info().Msg("Starting Prometheus HTTP server.")
+		http.Handle("/metrics", promhttp.Handler())
+		err := http.ListenAndServe(":59100", nil)
+		if err != nil {
+			e.config.Log.Error().Err(err).Msgf("Prometheus HTTP server stopped with an error: %v", err)
+			if err.Error() == lastError.Error() {
+				errCount = errCount + 1
+				if errCount >= 3 {
+					panic(fmt.Errorf("too many errors returned by Prometheus HTTP server: %s", err.Error()))
+				}
+			} else {
+				errCount = 0
+				lastError = err
+			}
+		}
+	}
+}
+
+func NewDeltaCalculator() *DeltaCalculator {
+	return &DeltaCalculator{
+		history: make(map[MetricHash]float64),
+	}
+}
+
+type DeltaCalculator struct {
+	lock    sync.Mutex
+	history map[MetricHash]float64
+}
+
+// Calculate the delta for given hash and value. Returns the provided value and false if a previous value didn't exist.
+func (d *DeltaCalculator) Calc(hash MetricHash, newValue float64) (float64, bool) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	oldValue, exists := d.history[hash]
+	d.history[hash] = newValue
+	return newValue - oldValue, exists
 }
 
 func GetNumberValues(tv *gnmipb.TypedValue) (float64, bool) {
@@ -62,28 +171,36 @@ func GetNumberValues(tv *gnmipb.TypedValue) (float64, bool) {
 	return 0, false
 }
 
-func UpdateToMetricNameAndTags(notification *gnmipb.Notification) {
-	for _, update := range notification.Update {
-		value, isNumber := GetNumberValues(update.Val)
-		if !isNumber {
-			return
+func UpdateToMetricNameAndLabels(update *gnmipb.Update) (string, prometheus.Labels) {
+	metricName := ""
+	labels := make(map[string]string)
+	for _, elem := range update.Path.Elem {
+		elemName := strings.ReplaceAll(elem.Name, "-", "_")
+		if metricName == "" {
+			metricName = elemName
+		} else {
+			metricName = metricName + "_" + elemName
 		}
 
-		metricName := ""
-		tags := make(map[string]string)
-		for _, elem := range update.Path.Elem {
-			if metricName == "" {
-				metricName = elem.Name
-			} else {
-				metricName = metricName + "." + elem.Name
-			}
-
-			for key, value := range elem.Key {
-				tagKey := metricName + "." + key
-				tags[tagKey] = value
-			}
+		for key, value := range elem.Key {
+			labelKey := metricName + "_" + strings.ReplaceAll(key, "-", "_")
+			labels[labelKey] = value
 		}
-		metricName = strings.TrimLeft(metricName, ".")
-		log.Info().Msgf("%s %+v %f", metricName, tags, value)
 	}
+	return metricName, labels
+}
+
+func NewMetricHash(name string, labels prometheus.Labels) MetricHash {
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var hash string
+	for _, k := range keys {
+		hash += k
+		hash += labels[k]
+	}
+	return MetricHash(xxhash.Sum64String(name + hash))
 }

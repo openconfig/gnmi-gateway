@@ -8,6 +8,6 @@ import (
 )
 
 type Exporter interface {
-	Start()
+	Start() error
 	Export(leaf *ctree.Leaf)
 }
