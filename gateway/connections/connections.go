@@ -52,15 +52,8 @@ func NewConnectionManagerDefault(config *configuration.GatewayConfig) (*Connecti
 		targets:           make(map[string]*TargetState),
 		targetsConfigChan: make(chan *targetpb.Configuration, 1),
 	}
-
-	// Setup the cache
 	cache.Type = cache.GnmiNoti
 	mgr.cache = cache.New(nil)
-
-	// TODO: Remove or enable these. Not sure what they do currently.
-	// Start functions to periodically update metadata stored in the cache for each targetCache.
-	//go periodic(*metadataUpdatePeriod, mgr.cache.UpdateMetadata)
-	//go periodic(*sizeUpdatePeriod, mgr.cache.UpdateSize)
 	return &mgr, nil
 }
 
