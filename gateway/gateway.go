@@ -27,11 +27,13 @@ import (
 )
 
 var (
-	Version = "0.1.0"
+	Buildtime string
+	Version   string
 )
 
 var (
 	EnablePrometheus bool
+	LogCaller        bool
 	PrintVersion     bool
 )
 
@@ -47,8 +49,12 @@ func Main() {
 	ParseArgs(config)
 
 	if PrintVersion {
-		fmt.Println(fmt.Sprintf("gnmi-gateway version %s", Version))
+		fmt.Println(fmt.Sprintf("gnmi-gateway version %s (Built %s)", Version, Buildtime))
 		os.Exit(0)
+	}
+
+	if true {
+		config.Log = config.Log.With().Caller().Logger()
 	}
 
 	opts := &GatewayStartOpts{
@@ -70,6 +76,7 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
 	flag.BoolVar(&config.EnableGNMIServer, "EnableServer", false, "Enable the gNMI server.")
 	flag.BoolVar(&EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter.")
+	flag.BoolVar(&LogCaller, "LogCaller", false, "Include the file and line number with each log message.")
 	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit.")
 
 	// Configuration Parameters

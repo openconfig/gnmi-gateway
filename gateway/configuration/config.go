@@ -18,6 +18,7 @@ package configuration
 import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/credentials"
 	"time"
 )
 
@@ -32,6 +33,8 @@ type GatewayConfig struct {
 	EnableGNMIServer bool
 	// Port to server the gNMI server on
 	ServerPort int
+	// gNMI Server TLS credentials. You must specify either this or both ServerTLSCert & ServerTLSKey if you -EnableServer
+	ServerTLSCreds credentials.TransportCredentials
 	// gNMI Server TLS Cert
 	ServerTLSCert string
 	// gNMI Server TLS Key

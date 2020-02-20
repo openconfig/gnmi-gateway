@@ -28,14 +28,21 @@ import (
 )
 
 func StartServer(config *configuration.GatewayConfig, c *cache.Cache) error {
-	// Initialize TLS credentials.
-	creds, err := credentials.NewServerTLSFromFile(config.ServerTLSCert, config.ServerTLSKey)
-	if err != nil {
-		return fmt.Errorf("failed to generate credentials: %v", err)
+	if config.ServerTLSCreds == nil {
+		if config.ServerTLSCert == "" || config.ServerTLSKey == "" {
+			return fmt.Errorf("no TLS creds; you must specify a TLS cert and key")
+		}
+
+		// Initialize TLS credentials.
+		creds, err := credentials.NewServerTLSFromFile(config.ServerTLSCert, config.ServerTLSKey)
+		if err != nil {
+			return fmt.Errorf("failed to generate credentials: %v", err)
+		}
+		config.ServerTLSCreds = creds
 	}
 
 	// Create a grpc Server.
-	srv := grpc.NewServer(grpc.Creds(creds))
+	srv := grpc.NewServer(grpc.Creds(config.ServerTLSCreds))
 	// Initialize gNMI Proxy Subscribe server.
 	subscribeSrv, err := subscribe.NewServer(c)
 	if err != nil {
