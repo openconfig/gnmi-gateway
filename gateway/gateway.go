@@ -43,13 +43,13 @@ type GatewayStartOpts struct {
 }
 
 func Main() {
+	config := configuration.NewDefaultGatewayConfig()
+	ParseArgs(config)
+
 	if PrintVersion {
 		fmt.Println(fmt.Sprintf("gnmi-gateway version %s", Version))
 		os.Exit(0)
 	}
-
-	config := configuration.NewDefaultGatewayConfig()
-	ParseArgs(config)
 
 	opts := &GatewayStartOpts{
 		TargetLoader: targets.NewJSONFileTargetLoader(config),
