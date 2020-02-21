@@ -127,6 +127,7 @@ func StartGateway(config *configuration.GatewayConfig, opts *GatewayStartOpts) e
 				config.Log.Error().Err(err).Msgf("Unable to start exporter %T", exporter)
 				finished <- err
 			}
+			// TODO: Call SetClient here as it's pretty universal.
 		}(exporter)
 	}
 

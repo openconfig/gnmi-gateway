@@ -253,6 +253,9 @@ func (s *TargetState) rejectUpdate(notification *gnmipb.Notification) error {
 					}
 				}
 			}
+			if path[0].Name == "netconf-state" {
+				return errors.New("bug for netconf-state path")
+			}
 		}
 	}
 	return nil
