@@ -27,6 +27,7 @@
 // Portions of this file including TargetState and its receivers (excluding modifications) are from
 // https://github.com/openconfig/gnmi/blob/89b2bf29312cda887da916d0f3a32c1624b7935f/cmd/gnmi_collector/gnmi_collector.go
 
+//
 package connections
 
 import (
@@ -44,20 +45,24 @@ import (
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 )
 
-// Container for some of the targetCache TargetState data. It is created once
-// for every device and used as a closure parameter by ProtoHandler.
+// TargetState makes the calls to connect a target, tracks any associated connection state, and is the container for
+// the target's cache data. It is created once for every device and used as a closure parameter by ProtoHandler.
 type TargetState struct {
 	config      *configuration.GatewayConfig
 	name        string
 	targetCache *cache.Target
 	// connected status is set to true when the first gnmi notification is received.
 	// it gets reset to false when disconnect call back of ReconnectClient is called.
-	connected  bool
+	connected bool
+	// connecting status is used to signal that some of the connection process has been started and
+	// full reconnection is necessary if the target configuration changes
 	connecting bool
 	client     *client.ReconnectClient
-	stopped    bool
-	target     *targetpb.Target
-	request    *gnmipb.SubscribeRequest
+	// stopped status signals that .disconnect() has been called we no longer want to connect to this target so we
+	// should stop trying to connect and release any locks that are being held
+	stopped bool
+	target  *targetpb.Target
+	request *gnmipb.SubscribeRequest
 }
 
 func (t *TargetState) Equal(other *targetpb.Target) bool {
@@ -117,6 +122,9 @@ func (t *TargetState) connect() {
 	}
 }
 
+// Attempt to acquire a connection slot. After a connection slot is acquired attempt to grab the lock for the target.
+// After the lock for the target is acquired connect to the target. If TargetState.disconnect() is called
+// all attempts and connections are aborted.
 func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted, lock *semaphore.Weighted) {
 	var connectionSlotAcquired = false
 	var connectionLockAcquired = false
