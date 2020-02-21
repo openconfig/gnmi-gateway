@@ -41,6 +41,7 @@ import (
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"golang.org/x/sync/semaphore"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/locking"
 )
 
 // TargetState makes the calls to connect a target, tracks any associated connection state, and is the container for
@@ -123,7 +124,7 @@ func (t *TargetState) connect() {
 // Attempt to acquire a connection slot. After a connection slot is acquired attempt to grab the lock for the target.
 // After the lock for the target is acquired connect to the target. If TargetState.disconnect() is called
 // all attempts and connections are aborted.
-func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted, lock *semaphore.Weighted) {
+func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted, lock locking.NonBlockingLocker) {
 	var connectionSlotAcquired = false
 	var connectionLockAcquired = false
 	for !t.stopped {
@@ -132,7 +133,7 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted, lock *
 		}
 		if connectionSlotAcquired {
 			if !connectionLockAcquired {
-				connectionLockAcquired = lock.TryAcquire(1)
+				connectionLockAcquired = lock.Try()
 			}
 			if connectionLockAcquired {
 				t.connect()
@@ -143,7 +144,7 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted, lock *
 		connectionSlot.Release(1)
 	}
 	if connectionLockAcquired {
-		lock.Release(1)
+		lock.Unlock()
 	}
 }
 

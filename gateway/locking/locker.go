@@ -21,27 +21,50 @@ import (
 )
 
 type MappedLocker interface {
-	Get(string) *semaphore.Weighted
+	Get(string) NonBlockingLocker
 }
 
 func NewLocalMappedLocker() MappedLocker {
-	return &LocalMappedLocker{
-		lookup: make(map[string]*semaphore.Weighted),
+	return &MappedLock{
+		lookup: make(map[string]NonBlockingLocker),
 	}
 }
 
-type LocalMappedLocker struct {
-	lookup map[string]*semaphore.Weighted
+type MappedLock struct {
+	lookup map[string]NonBlockingLocker
 	mutex  sync.Mutex
 }
 
-func (l *LocalMappedLocker) Get(name string) *semaphore.Weighted {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	lock, exists := l.lookup[name]
+func (m *MappedLock) Get(name string) NonBlockingLocker {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	lock, exists := m.lookup[name]
 	if !exists {
-		lock = semaphore.NewWeighted(1)
-		l.lookup[name] = lock
+		lock = NewNonBlockingLock()
+		m.lookup[name] = lock
 	}
 	return lock
+}
+
+type NonBlockingLocker interface {
+	Try() bool
+	Unlock()
+}
+
+type NonBlockingLock struct {
+	sem *semaphore.Weighted
+}
+
+func NewNonBlockingLock() NonBlockingLocker {
+	return &NonBlockingLock{
+		sem: semaphore.NewWeighted(1),
+	}
+}
+
+func (l *NonBlockingLock) Try() bool {
+	return l.sem.TryAcquire(1)
+}
+
+func (l *NonBlockingLock) Unlock() {
+	l.sem.Release(1)
 }
