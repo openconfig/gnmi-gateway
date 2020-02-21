@@ -253,6 +253,13 @@ func (s *TargetState) rejectUpdate(notification *gnmipb.Notification) error {
 					}
 				}
 			}
+			if path[0].Name == "network-instances" && path[1].Name == "network-instance" {
+				if value, exists := path[1].Key["name"]; exists {
+					if value == "network-instance" {
+						return errors.New("bug for Arista isis adjacency path") // Arista BUG #??????????
+					}
+				}
+			}
 			if path[0].Name == "netconf-state" {
 				return errors.New("bug for netconf-state path")
 			}
