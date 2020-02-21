@@ -26,8 +26,6 @@
 
 // Portions of this file including TargetState and its receivers (excluding modifications) are from
 // https://github.com/openconfig/gnmi/blob/89b2bf29312cda887da916d0f3a32c1624b7935f/cmd/gnmi_collector/gnmi_collector.go
-
-//
 package connections
 
 import (
