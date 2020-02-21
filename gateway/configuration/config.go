@@ -46,6 +46,8 @@ type GatewayConfig struct {
 	TargetConfigurationJSONFileReloadInterval time.Duration
 	// Timeout for dialing the target connection
 	TargetDialTimeout time.Duration
+	// Maximum number of targets that this instance will connect to at once.
+	TargetLimit int
 }
 
 func NewDefaultGatewayConfig() *GatewayConfig {

@@ -15,13 +15,13 @@ clean:
 	rm -f gnmi-gateway
 
 run: build
-	./gnmi-gateway -EnableServer -EnablePromethetus -OpenConfigDirectory=./oc-models/
+	./gnmi-gateway -EnableServer -EnablePrometheus -OpenConfigDirectory=./oc-models/
 
 sync:
 	go get ./...
 
 test:
-	go test -mod=vendor ./...
+	go test ./...
 
 update:
 	go mod tidy

@@ -74,16 +74,17 @@ func Main() {
 
 func ParseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
-	flag.BoolVar(&config.EnableGNMIServer, "EnableServer", false, "Enable the gNMI server.")
-	flag.BoolVar(&EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter.")
-	flag.BoolVar(&LogCaller, "LogCaller", false, "Include the file and line number with each log message.")
-	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit.")
+	flag.BoolVar(&config.EnableGNMIServer, "EnableServer", false, "Enable the gNMI server")
+	flag.BoolVar(&EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
+	flag.BoolVar(&LogCaller, "LogCaller", false, "Include the file and line number with each log message")
+	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit")
 
 	// Configuration Parameters
-	flag.StringVar(&config.OpenConfigModelDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter).")
-	flag.StringVar(&config.TargetConfigurationJSONFile, "TargetConfigFile", "targets.json", "JSON file containing the target configurations (default: targets.json).")
+	flag.StringVar(&config.OpenConfigModelDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
+	flag.StringVar(&config.TargetConfigurationJSONFile, "TargetConfigFile", "targets.json", "JSON file containing the target configurations (default: targets.json)")
 	flag.DurationVar(&config.TargetConfigurationJSONFileReloadInterval, "TargetConfigInterval", 10*time.Second, "Interval to reload the JSON file containing the target configurations (default: 10s)")
 	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time (default: 10s)")
+	flag.IntVar(&config.TargetLimit, "TargetLimit", 100, "Maximum number of targets that this instance will connect to at once (default: 100)")
 
 	flag.Parse()
 }
