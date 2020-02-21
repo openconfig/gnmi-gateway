@@ -48,6 +48,7 @@ import (
 // the target's cache data. It is created once for every device and used as a closure parameter by ProtoHandler.
 type TargetState struct {
 	config      *configuration.GatewayConfig
+	lock        locking.NonBlockingLocker
 	name        string
 	targetCache *cache.Target
 	// connected status is set to true when the first gnmi notification is received.
@@ -124,7 +125,7 @@ func (t *TargetState) connect() {
 // Attempt to acquire a connection slot. After a connection slot is acquired attempt to grab the lock for the target.
 // After the lock for the target is acquired connect to the target. If TargetState.disconnect() is called
 // all attempts and connections are aborted.
-func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted, lock locking.NonBlockingLocker) {
+func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted) {
 	var connectionSlotAcquired = false
 	var connectionLockAcquired = false
 	for !t.stopped {
@@ -133,9 +134,10 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted, lock l
 		}
 		if connectionSlotAcquired {
 			if !connectionLockAcquired {
-				connectionLockAcquired = lock.Try()
+				connectionLockAcquired, _ = t.lock.Try()
 			}
 			if connectionLockAcquired {
+				t.config.Log.Info().Msgf("Lock acquired for target %s", t.name)
 				t.connect()
 			}
 		}
@@ -144,7 +146,10 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted, lock l
 		connectionSlot.Release(1)
 	}
 	if connectionLockAcquired {
-		lock.Unlock()
+		err := t.lock.Unlock()
+		if err != nil {
+			t.config.Log.Warn().Err(err).Msgf("error while releasing lock for target %s: %v", t.name, err)
+		}
 	}
 }
 

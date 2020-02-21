@@ -23,6 +23,7 @@ import (
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/targets"
+	"strings"
 	"time"
 )
 
@@ -85,8 +86,11 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	flag.DurationVar(&config.TargetConfigurationJSONFileReloadInterval, "TargetConfigInterval", 10*time.Second, "Interval to reload the JSON file containing the target configurations (default: 10s)")
 	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time (default: 10s)")
 	flag.IntVar(&config.TargetLimit, "TargetLimit", 100, "Maximum number of targets that this instance will connect to at once (default: 100)")
+	zkHosts := flag.String("ZookeeperHosts", "127.0.0.1:2181", "Comma separated (no spaces) list of zookeeper hosts including port (default: 127.0.0.1:2181)")
+	flag.DurationVar(&config.ZookeeperTimeout, "ZookeeperTimeout", 1*time.Second, "Zookeeper timeout time. Minimum is 1 second. Failover time is (ZookeeperTimeout * 2). (default: 1s)")
 
 	flag.Parse()
+	config.ZookeeperHosts = strings.Split(*zkHosts, ",")
 }
 
 func StartGateway(config *configuration.GatewayConfig, opts *GatewayStartOpts) error {
@@ -97,7 +101,10 @@ func StartGateway(config *configuration.GatewayConfig, opts *GatewayStartOpts) e
 		os.Exit(1)
 	}
 	config.Log.Info().Msg("Starting connection manager.")
-	connMgr.Start()
+	if err := connMgr.Start(); err != nil {
+		config.Log.Error().Err(err).Msgf("Unable to start connection manager: %v", err)
+		return err
+	}
 
 	// channel to listen for errors from child goroutines
 	finished := make(chan error, 1)

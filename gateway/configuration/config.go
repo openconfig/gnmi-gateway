@@ -48,6 +48,11 @@ type GatewayConfig struct {
 	TargetDialTimeout time.Duration
 	// Maximum number of targets that this instance will connect to at once.
 	TargetLimit int
+
+	// All of the hosts in your Zookeeper cluster (or single Zookeeper instance)
+	ZookeeperHosts []string
+	// Zookeeper timeout time. Minimum is 1 second. Failover time is (ZookeeperTimeout * 2).
+	ZookeeperTimeout time.Duration
 }
 
 func NewDefaultGatewayConfig() *GatewayConfig {

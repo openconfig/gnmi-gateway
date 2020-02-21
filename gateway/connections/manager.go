@@ -20,9 +20,11 @@ import (
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	targetlib "github.com/openconfig/gnmi/target"
 	"github.com/rs/zerolog/log"
+	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/sync/semaphore"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/locking"
+	"strings"
 	"sync"
 )
 
@@ -30,7 +32,6 @@ func NewConnectionManagerDefault(config *configuration.GatewayConfig) (*Connecti
 	mgr := ConnectionManager{
 		config:            config,
 		connLimit:         semaphore.NewWeighted(int64(config.TargetLimit)),
-		locks:             locking.NewLocalMappedLocker(),
 		targets:           make(map[string]*TargetState),
 		targetsConfigChan: make(chan *targetpb.Configuration, 1),
 	}
@@ -43,10 +44,10 @@ type ConnectionManager struct {
 	cache             *cache.Cache
 	config            *configuration.GatewayConfig
 	connLimit         *semaphore.Weighted
-	locks             locking.MappedLocker
 	targets           map[string]*TargetState
 	targetsMutex      sync.Mutex
 	targetsConfigChan chan *targetpb.Configuration
+	zkConn            *zk.Conn
 }
 
 func (c *ConnectionManager) Cache() *cache.Cache {
@@ -100,15 +101,16 @@ func (c *ConnectionManager) ReloadTargets() {
 					newTargets[name] = currentTargetState
 				} else {
 					// no previous targetCache existed
-					c.config.Log.Info().Msgf("Initializing connection for %s.", name)
+					c.config.Log.Info().Msgf("Initializing target %s.", name)
 					newTargets[name] = &TargetState{
 						config:      c.config,
+						lock:        locking.NewZookeeperNonBlockingLock(c.zkConn, "/gnmi/target/"+name, zk.WorldACL(zk.PermAll)),
 						name:        name,
 						targetCache: c.cache.Add(name),
 						target:      target,
 						request:     targetConfig.Request[target.Request],
 					}
-					go newTargets[name].connectWithLock(c.connLimit, c.locks.Get(name))
+					go newTargets[name].connectWithLock(c.connLimit)
 				}
 			}
 
@@ -119,6 +121,40 @@ func (c *ConnectionManager) ReloadTargets() {
 	}
 }
 
-func (c *ConnectionManager) Start() {
+func (c *ConnectionManager) Start() error {
+	c.config.Log.Info().Msgf("Connecting to Zookeeper hosts: %v.", strings.Join(c.config.ZookeeperHosts, ", "))
+	newConn, eventChan, err := zk.Connect(c.config.ZookeeperHosts, c.config.ZookeeperTimeout)
+	if err != nil {
+		c.config.Log.Error().Err(err).Msgf("Unable to connect to Zookeeper: %v", err)
+		return err
+	}
+	c.zkConn = newConn
+	go c.zookeeperEventHandler(eventChan)
+	c.config.Log.Info().Msg("Zookeeper connected.")
 	go c.ReloadTargets()
+	return nil
+}
+
+func (c *ConnectionManager) zookeeperEventHandler(zkEventChan <-chan zk.Event) {
+	for {
+		select {
+		case event := <-zkEventChan:
+			if event.State != zk.StateUnknown {
+				switch event.State {
+				case zk.StateConnected:
+					log.Info().Msg("Connected to Zookeeper.")
+				case zk.StateConnecting:
+					log.Info().Msg("Attempting to connect to Zookeeper.")
+					//c.LockAcquired = false
+				case zk.StateDisconnected:
+					log.Info().Msg("Zookeeper disconnected.")
+					//c.LockAcquired = false
+				case zk.StateHasSession:
+					log.Info().Msg("Zookeeper session established.")
+				default:
+					log.Info().Msgf("Got Zookeeper state update: %v", event.State.String())
+				}
+			}
+		}
+	}
 }

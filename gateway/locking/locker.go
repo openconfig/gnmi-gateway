@@ -17,38 +17,11 @@ package locking
 
 import (
 	"golang.org/x/sync/semaphore"
-	"sync"
 )
 
-type MappedLocker interface {
-	Get(string) NonBlockingLocker
-}
-
-func NewLocalMappedLocker() MappedLocker {
-	return &MappedLock{
-		lookup: make(map[string]NonBlockingLocker),
-	}
-}
-
-type MappedLock struct {
-	lookup map[string]NonBlockingLocker
-	mutex  sync.Mutex
-}
-
-func (m *MappedLock) Get(name string) NonBlockingLocker {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	lock, exists := m.lookup[name]
-	if !exists {
-		lock = NewNonBlockingLock()
-		m.lookup[name] = lock
-	}
-	return lock
-}
-
 type NonBlockingLocker interface {
-	Try() bool
-	Unlock()
+	Try() (bool, error)
+	Unlock() error
 }
 
 type NonBlockingLock struct {
@@ -61,10 +34,11 @@ func NewNonBlockingLock() NonBlockingLocker {
 	}
 }
 
-func (l *NonBlockingLock) Try() bool {
-	return l.sem.TryAcquire(1)
+func (l *NonBlockingLock) Try() (bool, error) {
+	return l.sem.TryAcquire(1), nil
 }
 
-func (l *NonBlockingLock) Unlock() {
+func (l *NonBlockingLock) Unlock() error {
 	l.sem.Release(1)
+	return nil
 }
