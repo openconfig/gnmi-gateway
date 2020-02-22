@@ -41,6 +41,7 @@ import (
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 )
 
+// StartServer will start the gNMI server that serves the Subscribe interface to downstream gNMI clients.
 func StartServer(config *configuration.GatewayConfig, c *cache.Cache) error {
 	if config.ServerTLSCreds == nil {
 		if config.ServerTLSCert == "" || config.ServerTLSKey == "" {

@@ -93,13 +93,13 @@ func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
 
 func (e *PrometheusExporter) Start(cache *cache.Cache) error {
 	e.config.Log.Info().Msg("Starting Prometheus exporter.")
-	if e.config.OpenConfigModelDirectory == "" {
-		return errors.New("value is not set for OpenConfigModelDirectory configuration")
+	if e.config.OpenConfigDirectory == "" {
+		return errors.New("value is not set for OpenConfigDirectory configuration")
 	}
 	e.cache = cache
-	err := e.typeLookup.LoadAllModules(e.config.OpenConfigModelDirectory)
+	err := e.typeLookup.LoadAllModules(e.config.OpenConfigDirectory)
 	if err != nil {
-		e.config.Log.Error().Err(err).Msgf("Unable to load OpenConfig modules in %s: %v", e.config.OpenConfigModelDirectory, err)
+		e.config.Log.Error().Err(err).Msgf("Unable to load OpenConfig modules in %s: %v", e.config.OpenConfigDirectory, err)
 		return err
 	}
 

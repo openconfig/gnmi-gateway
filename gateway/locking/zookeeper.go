@@ -41,6 +41,7 @@
 
 // Portions of this file including parseSeq() and try() (excluding modifications) are from
 // https://github.com/samuel/go-zookeeper/blob/2cc03de413da42869e2db7ce7965d3e978d917eb/zk/lock.go
+
 package locking
 
 import (

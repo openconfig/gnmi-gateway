@@ -34,8 +34,8 @@ type JSONFileTargetLoader struct {
 func NewJSONFileTargetLoader(config *configuration.GatewayConfig) TargetLoader {
 	return &JSONFileTargetLoader{
 		config:   config,
-		file:     config.TargetConfigurationJSONFile,
-		interval: config.TargetConfigurationJSONFileReloadInterval,
+		file:     config.TargetJSONFile,
+		interval: config.TargetJSONFileReloadInterval,
 	}
 }
 

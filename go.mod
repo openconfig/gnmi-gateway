@@ -13,6 +13,9 @@ require (
 	github.com/rs/zerolog v1.17.2
 	github.com/samuel/go-zookeeper v0.0.0-20190923202752-2cc03de413da
 	github.com/stretchr/testify v1.4.0
+	golang.org/x/mod v0.2.0 // indirect
+	golang.org/x/net v0.0.0-20200219183655-46282727080f // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/tools v0.0.0-20200221224223-e1da425f72fd // indirect
 	google.golang.org/grpc v1.27.0
 )

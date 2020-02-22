@@ -13,6 +13,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package gateway provides an easily configurable server that can connect to multiple gNMI targets (devices) and
+// relay received messages to various exporters and to downstream gNMI clients.
+//
+// Targets are configured via a TargetLoader which generate all of the needed configuration for connecting to a target.
+// See github.com/openconfig/gnmi/proto/target for details on the Configuration options that are available.
+// See the TargetLoader docs for the minimum configuration required to connect to a target.
+//
+// The gateway only supports TLS so you'll need to generate some keys first if you don't already have them.
+// In production you should use properly signed TLS certificates.
+//		# Generate private key (server.key)
+//		openssl genrsa -out server.key 2048
+//		# or
+//		openssl ecparam -genkey -name secp384r1 -out server.key
+//
+//		# Generation of self-signed(x509) public key (server.crt) based on the private key (server.key)
+//		openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+//
+// You'll also need a copy of the latest OpenConfig YANG models if you don't already have it.
+//		git clone https://github.com/openconfig/public.git oc-models
+//
+// Finally, you need to build your target configurations. Copy targets-example.json to targets.json and edit it to
+// match the targets you want to connect to.
+//		cp targets-example.json targets.json
+//		vim targets.json
+//
+// See the example below or the Main() function in gateway.go for an example of how to start the server.
+// If you'd like to just use the built-in loaders and exporters you can configure them more easily from the command line:
+// 		go build
+//		./gnmi-gateway -EnableServer -EnablePrometheus -OpenConfigDirectory=./oc-models/
 package gateway
 
 import (
@@ -28,16 +57,19 @@ import (
 )
 
 var (
+	// Buildtime is set to the current time during the build process by GOLDFLAGS
 	Buildtime string
-	Version   string
+	// Version is set to the current git tag during the build process by GOLDFLAGS
+	Version string
 )
 
 var (
-	EnablePrometheus bool
-	LogCaller        bool
-	PrintVersion     bool
+	enablePrometheus bool
+	logCaller        bool
+	printVersion     bool
 )
 
+// GatewayStartOpts is passed to StartGateway() and is used to set the running configuration
 type GatewayStartOpts struct {
 	// Loader for targets
 	TargetLoader targets.TargetLoader
@@ -45,11 +77,13 @@ type GatewayStartOpts struct {
 	Exporters []exporters.Exporter
 }
 
+// Main is the entry point for the command-line and it's a good example of how to call StartGateway but
+// other than that you probably don't need Main for anything.
 func Main() {
 	config := configuration.NewDefaultGatewayConfig()
 	ParseArgs(config)
 
-	if PrintVersion {
+	if printVersion {
 		fmt.Println(fmt.Sprintf("gnmi-gateway version %s (Built %s)", Version, Buildtime))
 		os.Exit(0)
 	}
@@ -62,7 +96,7 @@ func Main() {
 		TargetLoader: targets.NewJSONFileTargetLoader(config),
 	}
 
-	if EnablePrometheus {
+	if enablePrometheus {
 		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(config))
 	}
 
@@ -73,17 +107,20 @@ func Main() {
 	}
 }
 
+// ParseArgs will parse all of the command-line parameters and configured the associated attributes on the
+// GatewayConfig. ParseArgs calls flag.Parse before returning so if you need to add arguments you should make
+// any calls to flag before calling ParseArgs.
 func ParseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
-	flag.BoolVar(&config.EnableGNMIServer, "EnableServer", false, "Enable the gNMI server")
-	flag.BoolVar(&EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
-	flag.BoolVar(&LogCaller, "LogCaller", false, "Include the file and line number with each log message")
-	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit")
+	flag.BoolVar(&config.EnableServer, "EnableServer", false, "Enable the gNMI server")
+	flag.BoolVar(&enablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
+	flag.BoolVar(&logCaller, "LogCaller", false, "Include the file and line number with each log message")
+	flag.BoolVar(&printVersion, "version", false, "Print version and exit")
 
 	// Configuration Parameters
-	flag.StringVar(&config.OpenConfigModelDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
-	flag.StringVar(&config.TargetConfigurationJSONFile, "TargetConfigFile", "targets.json", "JSON file containing the target configurations (default: targets.json)")
-	flag.DurationVar(&config.TargetConfigurationJSONFileReloadInterval, "TargetConfigInterval", 10*time.Second, "Interval to reload the JSON file containing the target configurations (default: 10s)")
+	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
+	flag.StringVar(&config.TargetJSONFile, "TargetJSONFile", "targets.json", "JSON file containing the target configurations (default: targets.json)")
+	flag.DurationVar(&config.TargetJSONFileReloadInterval, "TargetJSONFileReloadInterval", 10*time.Second, "Interval to reload the JSON file containing the target configurations (default: 10s)")
 	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time (default: 10s)")
 	flag.IntVar(&config.TargetLimit, "TargetLimit", 100, "Maximum number of targets that this instance will connect to at once (default: 100)")
 	zkHosts := flag.String("ZookeeperHosts", "127.0.0.1:2181", "Comma separated (no spaces) list of zookeeper hosts including port (default: 127.0.0.1:2181)")
@@ -93,6 +130,8 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	config.ZookeeperHosts = strings.Split(*zkHosts, ",")
 }
 
+// StartGateway starts up all of the loaders and exporters provided by GatewayStartOpts. This is the
+// primary way the server should be started.
 func StartGateway(config *configuration.GatewayConfig, opts *GatewayStartOpts) error {
 	config.Log.Info().Msg("Starting GNMI Gateway.")
 	connMgr, err := connections.NewConnectionManagerDefault(config)
@@ -118,7 +157,7 @@ func StartGateway(config *configuration.GatewayConfig, opts *GatewayStartOpts) e
 		opts.TargetLoader.WatchConfiguration(connMgr.TargetConfigChan())
 	}()
 
-	if config.EnableGNMIServer {
+	if config.EnableServer {
 		config.Log.Info().Msg("Starting gNMI server.")
 		go func() {
 			if err := StartServer(config, connMgr.Cache()); err != nil {

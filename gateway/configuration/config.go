@@ -18,20 +18,18 @@ package configuration
 import (
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/credentials"
+	"os"
 	"time"
 )
 
 type GatewayConfig struct {
+	// Enable GNMI Server
+	EnableServer bool
 	// Logger used by the Gateway code
 	Log zerolog.Logger
-
 	// OpenConfig Models 'public' folder location
-	OpenConfigModelDirectory string
-
-	// Enable GNMI Server
-	EnableGNMIServer bool
+	OpenConfigDirectory string
 	// Port to server the gNMI server on
 	ServerPort int
 	// gNMI Server TLS credentials. You must specify either this or both ServerTLSCert & ServerTLSKey if you -EnableServer
@@ -40,18 +38,16 @@ type GatewayConfig struct {
 	ServerTLSCert string
 	// gNMI Server TLS Key
 	ServerTLSKey string
-
 	// Configs for connections to targets
-	TargetConfigurationJSONFile string
+	TargetJSONFile string
 	// Interval to reload the target configuration JSON file.
-	TargetConfigurationJSONFileReloadInterval time.Duration
+	TargetJSONFileReloadInterval time.Duration
 	// Timeout for dialing the target connection
 	TargetDialTimeout time.Duration
 	// Maximum number of targets that this instance will connect to at once.
 	TargetLimit int
 	// Updates to be dropped prior to being inserted into the cache
 	UpdateRejections [][]*gnmipb.PathElem
-
 	// All of the hosts in your Zookeeper cluster (or single Zookeeper instance)
 	ZookeeperHosts []string
 	// Zookeeper timeout time. Minimum is 1 second. Failover time is (ZookeeperTimeout * 2).
@@ -60,7 +56,7 @@ type GatewayConfig struct {
 
 func NewDefaultGatewayConfig() *GatewayConfig {
 	config := &GatewayConfig{
-		Log: log.Logger,
+		Log: zerolog.New(os.Stderr).With().Timestamp().Logger(),
 	}
 	return config
 }
