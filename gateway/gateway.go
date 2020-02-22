@@ -64,9 +64,9 @@ var (
 )
 
 var (
-	enablePrometheus bool
-	logCaller        bool
-	printVersion     bool
+	EnablePrometheus bool
+	LogCaller        bool
+	PrintVersion     bool
 )
 
 // GatewayStartOpts is passed to StartGateway() and is used to set the running configuration
@@ -83,7 +83,7 @@ func Main() {
 	config := configuration.NewDefaultGatewayConfig()
 	ParseArgs(config)
 
-	if printVersion {
+	if PrintVersion {
 		fmt.Println(fmt.Sprintf("gnmi-gateway version %s (Built %s)", Version, Buildtime))
 		os.Exit(0)
 	}
@@ -96,7 +96,7 @@ func Main() {
 		TargetLoader: targets.NewJSONFileTargetLoader(config),
 	}
 
-	if enablePrometheus {
+	if EnablePrometheus {
 		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(config))
 	}
 
@@ -113,9 +113,9 @@ func Main() {
 func ParseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
 	flag.BoolVar(&config.EnableServer, "EnableServer", false, "Enable the gNMI server")
-	flag.BoolVar(&enablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
-	flag.BoolVar(&logCaller, "LogCaller", false, "Include the file and line number with each log message")
-	flag.BoolVar(&printVersion, "version", false, "Print version and exit")
+	flag.BoolVar(&EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
+	flag.BoolVar(&LogCaller, "LogCaller", false, "Include the file and line number with each log message")
+	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit")
 
 	// Configuration Parameters
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
