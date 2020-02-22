@@ -198,7 +198,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 		}
 		err := t.targetCache.GnmiUpdate(v.Update)
 		if err != nil {
-			return fmt.Errorf("targetCache cache update error: %t: %+v", err, v.Update)
+			return fmt.Errorf("targetCache cache update error: %v: %+v", err, v.Update)
 		}
 	case *gnmipb.SubscribeResponse_SyncResponse:
 		t.config.Log.Debug().Msgf("Target is synced: %s", t.name)
@@ -206,7 +206,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 	case *gnmipb.SubscribeResponse_Error:
 		return fmt.Errorf("error in response: %s", v)
 	default:
-		return fmt.Errorf("unknown response %T: %t", v, v)
+		return fmt.Errorf("unknown response %T: %v", v, v)
 	}
 	return nil
 }
