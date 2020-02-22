@@ -198,11 +198,13 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 		}
 		err := t.targetCache.GnmiUpdate(v.Update)
 		if err != nil {
-			if err.Error() == "suppressed duplicate value" {
+			switch err.Error() {
+			case "suppressed duplicate value":
 				// duplicate values won't corrupt the cache so no need to return an error to the ProtoHandler caller
 				t.config.Log.Warn().Msgf("%s: %+v", err, v.Update)
+			default:
+				return fmt.Errorf("targetCache cache update error: %v: %+v", err, v.Update)
 			}
-			return fmt.Errorf("targetCache cache update error: %v: %+v", err, v.Update)
 		}
 	case *gnmipb.SubscribeResponse_SyncResponse:
 		t.config.Log.Debug().Msgf("Target is synced: %s", t.name)
