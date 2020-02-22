@@ -57,10 +57,10 @@ import (
 )
 
 var (
-	// Buildtime is set to the current time during the build process by GOLDFLAGS
-	Buildtime string
-	// Version is set to the current git tag during the build process by GOLDFLAGS
-	Version string
+	// buildtime is set to the current time during the build process by GOLDFLAGS
+	buildtime string
+	// version is set to the current git tag during the build process by GOLDFLAGS
+	version string
 )
 
 var (
@@ -84,7 +84,7 @@ func Main() {
 	ParseArgs(config)
 
 	if printVersion {
-		fmt.Println(fmt.Sprintf("gnmi-gateway version %s (Built %s)", Version, Buildtime))
+		fmt.Println(fmt.Sprintf("gnmi-gateway version %s (Built %s)", version, buildtime))
 		os.Exit(0)
 	}
 
