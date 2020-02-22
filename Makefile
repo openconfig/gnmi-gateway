@@ -14,6 +14,9 @@ clean:
 	rm -rf oc-models
 	rm -f gnmi-gateway
 
+debug: build
+	./gnmi-gateway -EnableServer -EnablePrometheus -OpenConfigDirectory=./oc-models/ -ServerTLSCert=server.crt -ServerTLSKey=server.key -PProf
+
 run: build
 	./gnmi-gateway -EnableServer -EnablePrometheus -OpenConfigDirectory=./oc-models/
 
@@ -22,6 +25,10 @@ sync:
 
 test:
 	go test ./...
+
+tls:
+	openssl ecparam -genkey -name secp384r1 -out server.key
+	openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
 
 update:
 	go mod tidy

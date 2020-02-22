@@ -47,6 +47,8 @@ package gateway
 import (
 	"flag"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
@@ -67,6 +69,7 @@ var (
 	EnablePrometheus bool
 	LogCaller        bool
 	PrintVersion     bool
+	PProf            bool
 )
 
 // GatewayStartOpts is passed to StartGateway() and is used to set the running configuration
@@ -86,6 +89,16 @@ func Main() {
 	if PrintVersion {
 		fmt.Println(fmt.Sprintf("gnmi-gateway version %s (Built %s)", Version, Buildtime))
 		os.Exit(0)
+	}
+
+	if PProf {
+		port := ":6161"
+		go func() {
+			if err := http.ListenAndServe(port, nil); err != nil {
+				config.Log.Error().Err(err).Msgf("error starting pprof web server: %v", err)
+			}
+			config.Log.Info().Msgf("Launched pprof web server on %v", port)
+		}()
 	}
 
 	if true {
@@ -112,15 +125,19 @@ func Main() {
 // any calls to flag before calling ParseArgs.
 func ParseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
-	flag.BoolVar(&config.EnableServer, "EnableServer", false, "Enable the gNMI server")
 	flag.BoolVar(&EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
 	flag.BoolVar(&LogCaller, "LogCaller", false, "Include the file and line number with each log message")
+	flag.BoolVar(&PProf, "PProf", false, "Enable the pprof debugging web server.")
 	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit")
 
 	// Configuration Parameters
+	flag.BoolVar(&config.EnableServer, "EnableServer", false, "Enable the gNMI server")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
+	flag.IntVar(&config.ServerPort, "ServerPort", 2906, "TCP port to run the gNMI server on (default: 2906)")
+	flag.StringVar(&config.ServerTLSCert, "ServerTLSCert", "", "File containing the gNMI server TLS certificate (required to enable the gNMI server)")
+	flag.StringVar(&config.ServerTLSKey, "ServerTLSKey", "", "File containing the gNMI server TLS key (required to enable the gNMI server)")
 	flag.StringVar(&config.TargetJSONFile, "TargetJSONFile", "targets.json", "JSON file containing the target configurations (default: targets.json)")
-	flag.DurationVar(&config.TargetJSONFileReloadInterval, "TargetJSONFileReloadInterval", 10*time.Second, "Interval to reload the JSON file containing the target configurations (default: 10s)")
+	flag.DurationVar(&config.TargetJSONFileReloadInterval, "TargetJSONFileReloadInterval", 60*time.Second, "Interval to reload the JSON file containing the target configurations (default: 10s)")
 	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time (default: 10s)")
 	flag.IntVar(&config.TargetLimit, "TargetLimit", 100, "Maximum number of targets that this instance will connect to at once (default: 100)")
 	zkHosts := flag.String("ZookeeperHosts", "127.0.0.1:2181", "Comma separated (no spaces) list of zookeeper hosts including port (default: 127.0.0.1:2181)")
