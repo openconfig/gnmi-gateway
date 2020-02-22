@@ -1,8 +1,8 @@
 VERSION := "$(shell git describe --tags)-$(shell git rev-parse --short HEAD)"
 BUILDTIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-GOLDFLAGS += -X gateway.version=$(VERSION)
-GOLDFLAGS += -X gateway.buildtime=$(BUILDTIME)
+GOLDFLAGS += -X gateway.Version=$(VERSION)
+GOLDFLAGS += -X gateway.Buildtime=$(BUILDTIME)
 GOFLAGS = -ldflags "$(GOLDFLAGS)"
 
 build: clean test
