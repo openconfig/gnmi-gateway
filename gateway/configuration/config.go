@@ -16,6 +16,7 @@
 package configuration
 
 import (
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/credentials"
@@ -48,6 +49,8 @@ type GatewayConfig struct {
 	TargetDialTimeout time.Duration
 	// Maximum number of targets that this instance will connect to at once.
 	TargetLimit int
+	// Updates to be dropped prior to being inserted into the cache
+	UpdateRejections [][]*gnmipb.PathElem
 
 	// All of the hosts in your Zookeeper cluster (or single Zookeeper instance)
 	ZookeeperHosts []string

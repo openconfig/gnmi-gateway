@@ -31,7 +31,6 @@ package connections
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/openconfig/gnmi/cache"
@@ -194,8 +193,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 		if v.Update.Prefix.Target == "" {
 			v.Update.Prefix.Target = t.name
 		}
-		if err := t.rejectUpdate(v.Update); err != nil {
-			//t.config.Log.Warn().Msgf("Update rejected: %t: %+v", err, v.Update)
+		if t.rejectUpdate(v.Update) {
 			return nil
 		}
 		err := t.targetCache.GnmiUpdate(v.Update)
@@ -213,28 +211,42 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 	return nil
 }
 
-func (t *TargetState) rejectUpdate(notification *gnmipb.Notification) error {
+func (t *TargetState) rejectUpdate(notification *gnmipb.Notification) bool {
 	for _, update := range notification.GetUpdate() {
 		path := update.GetPath().GetElem()
-		if len(path) >= 2 {
-			if path[0].Name == "interfaces" && path[1].Name == "interface" {
-				if value, exists := path[1].Key["name"]; exists {
-					if value == "interface" {
-						return errors.New("bug for Arista interface path") // Arista BUG #??????????
-					}
-				}
-			}
-			if path[0].Name == "network-instances" && path[1].Name == "network-instance" {
-				if value, exists := path[1].Key["name"]; exists {
-					if value == "network-instance" {
-						return errors.New("bug for Arista isis adjacency path") // Arista BUG #??????????
-					}
-				}
-			}
-			if path[0].Name == "netconf-state" {
-				return errors.New("bug for netconf-state path")
+		for _, rejectionPath := range t.config.UpdateRejections {
+			if matchPath(path, rejectionPath) {
+				return true
 			}
 		}
 	}
-	return nil
+	return false
+}
+
+// Return true if all of the elements in toMatch are found in path.
+func matchPath(path []*gnmipb.PathElem, toMatch []*gnmipb.PathElem) bool {
+	if len(path) < len(toMatch) {
+		return false
+	}
+	for i, elem := range toMatch {
+		if path[i].Name != elem.Name {
+			return false
+		}
+		if elem.Key != nil {
+			if path[i].Key == nil {
+				return false
+			}
+
+			for k, v := range elem.Key {
+				ov, exists := path[i].Key[k]
+				if !exists {
+					return false
+				}
+				if v != ov {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
