@@ -91,19 +91,7 @@ func Main() {
 		os.Exit(0)
 	}
 
-	if PProf {
-		port := ":6161"
-		go func() {
-			if err := http.ListenAndServe(port, nil); err != nil {
-				config.Log.Error().Err(err).Msgf("error starting pprof web server: %v", err)
-			}
-			config.Log.Info().Msgf("Launched pprof web server on %v", port)
-		}()
-	}
-
-	if true {
-		config.Log = config.Log.With().Caller().Logger()
-	}
+	SetupDebugging(config)
 
 	opts := &GatewayStartOpts{
 		TargetLoader: targets.NewJSONFileTargetLoader(config),
@@ -145,6 +133,23 @@ func ParseArgs(config *configuration.GatewayConfig) {
 
 	flag.Parse()
 	config.ZookeeperHosts = strings.Split(*zkHosts, ",")
+}
+
+// SetupDebugging optionally sets up debugging features including -LogCaller and -PProf.
+func SetupDebugging(config *configuration.GatewayConfig) {
+	if LogCaller {
+		config.Log = config.Log.With().Caller().Logger()
+	}
+
+	if PProf {
+		port := ":6161"
+		go func() {
+			if err := http.ListenAndServe(port, nil); err != nil {
+				config.Log.Error().Err(err).Msgf("error starting pprof web server: %v", err)
+			}
+			config.Log.Info().Msgf("Launched pprof web server on %v", port)
+		}()
+	}
 }
 
 // StartGateway starts up all of the loaders and exporters provided by GatewayStartOpts. This is the
