@@ -199,9 +199,11 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 		}
 		err := t.targetCache.GnmiUpdate(v.Update)
 		if err != nil {
+			// Some errors won't corrupt the cache so no need to return an error to the ProtoHandler caller. For these
+			// errors we just log them and move on.
 			switch err.Error() {
 			case "suppressed duplicate value":
-				// duplicate values won't corrupt the cache so no need to return an error to the ProtoHandler caller
+			case "update is stale":
 				t.config.Log.Warn().Msgf("%s: %+v", err, v.Update)
 			default:
 				return fmt.Errorf("targetCache cache update error: %v: %+v", err, v.Update)
