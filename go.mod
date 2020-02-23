@@ -9,6 +9,7 @@ require (
 	github.com/openconfig/gnmi v0.0.0-20190823184014-89b2bf29312c
 	github.com/openconfig/goyang v0.0.0-20200115183954-d0a48929f0ea
 	github.com/openconfig/ygot v0.6.0 // indirect
+	github.com/pkg/profile v1.4.0
 	github.com/prometheus/client_golang v1.4.1
 	github.com/rs/zerolog v1.17.2
 	github.com/samuel/go-zookeeper v0.0.0-20190923202752-2cc03de413da

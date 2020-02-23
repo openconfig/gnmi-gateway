@@ -50,11 +50,14 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
+	"runtime/pprof"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/targets"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -66,6 +69,7 @@ var (
 )
 
 var (
+	CPUProfile       string
 	EnablePrometheus bool
 	LogCaller        bool
 	PrintVersion     bool
@@ -91,7 +95,28 @@ func Main() {
 		os.Exit(0)
 	}
 
-	SetupDebugging(config)
+	var deferred []func()
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		config.Log.Info().Msg("Ctrl^C pressed.")
+		for _, deferredFunc := range deferred {
+			deferredFunc()
+		}
+		config.Log.Info().Msg("Exit.")
+		os.Exit(0)
+	}()
+
+	debugCleanup, err := SetupDebugging(config)
+	if err != nil {
+		config.Log.Error().Err(err).Msgf("Unable to setup debugging: %v", err)
+		os.Exit(1)
+	} else {
+		if debugCleanup != nil {
+			deferred = append(deferred, debugCleanup)
+		}
+	}
 
 	opts := &GatewayStartOpts{
 		TargetLoader: targets.NewJSONFileTargetLoader(config),
@@ -101,7 +126,7 @@ func Main() {
 		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(config))
 	}
 
-	err := StartGateway(config, opts) // run forever (or until an error happens)
+	err = StartGateway(config, opts) // run forever (or until an error happens)
 	if err != nil {
 		config.Log.Error().Err(err).Msgf("Gateway exited with an error: %v", err)
 		os.Exit(1)
@@ -113,6 +138,7 @@ func Main() {
 // any calls to flag before calling ParseArgs.
 func ParseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
+	flag.StringVar(&CPUProfile, "CPUProfile", "", "Specify the name of the file for writing CPU profiling to enable the CPU profiling.")
 	flag.BoolVar(&EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
 	flag.BoolVar(&LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.BoolVar(&PProf, "PProf", false, "Enable the pprof debugging web server.")
@@ -137,7 +163,9 @@ func ParseArgs(config *configuration.GatewayConfig) {
 }
 
 // SetupDebugging optionally sets up debugging features including -LogCaller and -PProf.
-func SetupDebugging(config *configuration.GatewayConfig) {
+func SetupDebugging(config *configuration.GatewayConfig) (func(), error) {
+	var deferFuncs []func()
+
 	if LogCaller {
 		config.Log = config.Log.With().Caller().Logger()
 	}
@@ -151,6 +179,26 @@ func SetupDebugging(config *configuration.GatewayConfig) {
 			config.Log.Info().Msgf("Launched pprof web server on %v", port)
 		}()
 	}
+
+	if CPUProfile != "" {
+		f, err := os.Create(CPUProfile)
+		if err != nil {
+			config.Log.Error().Err(err).Msgf("Unable to create CPU profiling file %s", CPUProfile)
+			return nil, err
+		}
+		if err = pprof.StartCPUProfile(f); err != nil {
+			config.Log.Error().Err(err).Msg("Unable to start CPU profiling")
+			return nil, err
+		}
+		config.Log.Info().Msg("Started CPU profiling.")
+		deferFuncs = append(deferFuncs, pprof.StopCPUProfile)
+	}
+	return func() {
+		config.Log.Info().Msg("Cleaning up debugging.")
+		for _, deferred := range deferFuncs {
+			deferred()
+		}
+	}, nil
 }
 
 // StartGateway starts up all of the loaders and exporters provided by GatewayStartOpts. This is the
