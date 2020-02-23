@@ -100,11 +100,12 @@ func (c *ConnectionManager) ReloadTargets() {
 					}
 					newTargets[name] = currentTargetState
 				} else {
+					lockPath := strings.TrimRight(c.config.ZookeeperPrefix, "/") + "/target/" + name
 					// no previous targetCache existed
 					c.config.Log.Info().Msgf("Initializing target %s.", name)
 					newTargets[name] = &TargetState{
 						config:      c.config,
-						lock:        locking.NewZookeeperNonBlockingLock(c.zkConn, "/gnmi/target/"+name, zk.WorldACL(zk.PermAll)),
+						lock:        locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, zk.WorldACL(zk.PermAll)),
 						name:        name,
 						targetCache: c.cache.Add(name),
 						target:      target,
@@ -129,13 +130,13 @@ func (c *ConnectionManager) Start() error {
 		return err
 	}
 	c.zkConn = newConn
-	go c.zookeeperEventHandler(eventChan)
+	go zookeeperEventHandler(eventChan)
 	c.config.Log.Info().Msg("Zookeeper connected.")
 	go c.ReloadTargets()
 	return nil
 }
 
-func (c *ConnectionManager) zookeeperEventHandler(zkEventChan <-chan zk.Event) {
+func zookeeperEventHandler(zkEventChan <-chan zk.Event) {
 	for {
 		select {
 		case event := <-zkEventChan:

@@ -129,6 +129,7 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time (default: 10s)")
 	flag.IntVar(&config.TargetLimit, "TargetLimit", 100, "Maximum number of targets that this instance will connect to at once (default: 100)")
 	zkHosts := flag.String("ZookeeperHosts", "127.0.0.1:2181", "Comma separated (no spaces) list of zookeeper hosts including port (default: 127.0.0.1:2181)")
+	flag.StringVar(&config.ZookeeperPrefix, "ZookeeperPrefix", "/gnmi/gateway/", "Prefix for the lock path in Zookeeper (default: /gnmi/gateway)")
 	flag.DurationVar(&config.ZookeeperTimeout, "ZookeeperTimeout", 1*time.Second, "Zookeeper timeout time. Minimum is 1 second. Failover time is (ZookeeperTimeout * 2). (default: 1s)")
 
 	flag.Parse()

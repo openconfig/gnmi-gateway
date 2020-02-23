@@ -50,6 +50,8 @@ type GatewayConfig struct {
 	UpdateRejections [][]*gnmipb.PathElem
 	// All of the hosts in your Zookeeper cluster (or single Zookeeper instance)
 	ZookeeperHosts []string
+	// Prefix for the lock path in Zookeeper (e.g. /gnmi/gateway)
+	ZookeeperPrefix string
 	// Zookeeper timeout time. Minimum is 1 second. Failover time is (ZookeeperTimeout * 2).
 	ZookeeperTimeout time.Duration
 }
