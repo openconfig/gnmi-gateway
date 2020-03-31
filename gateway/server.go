@@ -38,42 +38,41 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"net"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 )
 
 // StartServer will start the gNMI server that serves the Subscribe interface to downstream gNMI clients.
-func StartServer(config *configuration.GatewayConfig, c *cache.Cache) error {
-	if config.ServerTLSCreds == nil {
-		if config.ServerTLSCert == "" || config.ServerTLSKey == "" {
+func (g *Gateway) StartServer(cache *cache.Cache) error {
+	if g.config.ServerTLSCreds == nil {
+		if g.config.ServerTLSCert == "" || g.config.ServerTLSKey == "" {
 			return fmt.Errorf("no TLS creds; you must specify a TLS cert and key")
 		}
 
 		// Initialize TLS credentials.
-		creds, err := credentials.NewServerTLSFromFile(config.ServerTLSCert, config.ServerTLSKey)
+		creds, err := credentials.NewServerTLSFromFile(g.config.ServerTLSCert, g.config.ServerTLSKey)
 		if err != nil {
 			return fmt.Errorf("failed to generate credentials: %v", err)
 		}
-		config.ServerTLSCreds = creds
+		g.config.ServerTLSCreds = creds
 	}
 
 	// Create a grpc Server.
-	srv := grpc.NewServer(grpc.Creds(config.ServerTLSCreds))
+	srv := grpc.NewServer(grpc.Creds(g.config.ServerTLSCreds))
 	// Initialize gNMI Proxy Subscribe server.
-	subscribeSrv, err := subscribe.NewServer(c)
+	subscribeSrv, err := subscribe.NewServer(cache)
 	if err != nil {
 		return fmt.Errorf("Could not instantiate gNMI server: %v", err)
 	}
 	gnmipb.RegisterGNMIServer(srv, subscribeSrv)
 	// Forward streaming updates to clients.
-	c.SetClient(subscribeSrv.Update)
+	g.AddClient(subscribeSrv.Update)
 	// Register listening port and start serving.
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.ServerPort))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", g.config.ServerPort))
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 	go func() {
 		err := srv.Serve(lis) // blocks
-		config.Log.Error().Err(err).Msg("Error running gNMI server.")
+		g.config.Log.Error().Err(err).Msg("Error running gNMI server.")
 	}()
 	defer srv.Stop()
 	ctx := context.Background()

@@ -40,7 +40,8 @@ func Example() {
 		ZookeeperTimeout:             1 * time.Second,
 	}
 
-	err := StartGateway(config, &GatewayStartOpts{
+	gateway := NewGateway(config)
+	err := gateway.StartGateway(&StartOpts{
 		TargetLoader: targets.NewJSONFileTargetLoader(config),
 		Exporters: []exporters.Exporter{
 			exporters.NewPrometheusExporter(config),
