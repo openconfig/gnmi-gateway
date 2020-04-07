@@ -41,7 +41,7 @@ import (
 )
 
 // StartServer will start the gNMI server that serves the Subscribe interface to downstream gNMI clients.
-func (g *Gateway) StartServer(cache *cache.Cache) error {
+func (g *Gateway) StartServer(c *cache.Cache) error {
 	if g.config.ServerTLSCreds == nil {
 		if g.config.ServerTLSCert == "" || g.config.ServerTLSKey == "" {
 			return fmt.Errorf("no TLS creds; you must specify a TLS cert and key")
@@ -58,7 +58,7 @@ func (g *Gateway) StartServer(cache *cache.Cache) error {
 	// Create a grpc Server.
 	srv := grpc.NewServer(grpc.Creds(g.config.ServerTLSCreds))
 	// Initialize gNMI Proxy Subscribe server.
-	subscribeSrv, err := subscribe.NewServer(cache)
+	subscribeSrv, err := subscribe.NewServer(c)
 	if err != nil {
 		return fmt.Errorf("Could not instantiate gNMI server: %v", err)
 	}
