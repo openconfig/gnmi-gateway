@@ -117,6 +117,10 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	// channel to listen for errors from child goroutines
 	finished := make(chan error, 1)
 
+	if g.config.TargetJSONFile != "" {
+		opts.TargetLoader = targets.NewJSONFileTargetLoader(g.config)
+	}
+
 	go func() {
 		err := opts.TargetLoader.Start()
 		if err != nil {

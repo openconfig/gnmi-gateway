@@ -24,7 +24,6 @@ import (
 	"runtime/pprof"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/targets"
 	"strings"
 	"syscall"
 	"time"
@@ -64,9 +63,7 @@ func Main() {
 		}
 	}
 
-	opts := &StartOpts{
-		TargetLoader: targets.NewJSONFileTargetLoader(config),
-	}
+	opts := new(StartOpts)
 
 	if EnablePrometheus {
 		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(config))
@@ -94,10 +91,10 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	// Configuration Parameters
 	flag.BoolVar(&config.EnableServer, "EnableServer", false, "Enable the gNMI server")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
-	flag.IntVar(&config.ServerPort, "ServerPort", 2906, "TCP port to run the gNMI server on (default: 2906)")
+	flag.IntVar(&config.ServerPort, "ServerPort", 9339, "TCP port to run the gNMI server on (default: 9339)")
 	flag.StringVar(&config.ServerTLSCert, "ServerTLSCert", "", "File containing the gNMI server TLS certificate (required to enable the gNMI server)")
 	flag.StringVar(&config.ServerTLSKey, "ServerTLSKey", "", "File containing the gNMI server TLS key (required to enable the gNMI server)")
-	flag.StringVar(&config.TargetJSONFile, "TargetJSONFile", "targets.json", "JSON file containing the target configurations (default: targets.json)")
+	flag.StringVar(&config.TargetJSONFile, "TargetJSONFile", "", "JSON file containing the target configurations")
 	flag.DurationVar(&config.TargetJSONFileReloadInterval, "TargetJSONFileReloadInterval", 60*time.Second, "Interval to reload the JSON file containing the target configurations (default: 10s)")
 	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time (default: 10s)")
 	flag.IntVar(&config.TargetLimit, "TargetLimit", 100, "Maximum number of targets that this instance will connect to at once (default: 100)")
