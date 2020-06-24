@@ -19,7 +19,7 @@ download:
 	if [ -d ./oc-models ]; then git --git-dir=./oc-models/.git pull; else git clone https://github.com/openconfig/public.git oc-models; fi
 
 run: build
-	./gnmi-gateway -EnableServer -EnablePrometheus -OpenConfigDirectory=./oc-models/
+	./gnmi-gateway -EnableServer -EnablePrometheus -OpenConfigDirectory=./oc-models/ -ServerTLSCert=server.crt -ServerTLSKey=server.key
 
 sync:
 	go get ./...
