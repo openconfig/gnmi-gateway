@@ -183,8 +183,10 @@ func (t *TargetState) disconnect() error {
 // Callback for gNMI client to signal that it has disconnected.
 func (t *TargetState) disconnected() {
 	t.connected = false
-	t.targetCache.Disconnect()
-	t.targetCache.Reset()
+	if t.queryTarget != "*" {
+		t.targetCache.Disconnect()
+		t.targetCache.Reset()
+	}
 }
 
 func (t *TargetState) reconnect() error {
