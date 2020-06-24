@@ -48,8 +48,12 @@ import (
 // the target's cache data. It is created once for every device and used as a closure parameter by ProtoHandler.
 type TargetState struct {
 	config      *configuration.GatewayConfig
+	connManager *ConnectionManager
 	lock        locking.NonBlockingLocker
-	name        string
+	// The unique name of the target that is being connected to
+	name string
+	// Usually the target name but could be "*"
+	queryTarget string
 	targetCache *cache.Target
 	// connected status is set to true when the first gnmi notification is received.
 	// it gets reset to false when disconnect call back of ReconnectClient is called.
@@ -83,7 +87,7 @@ func (t *TargetState) Equal(other *targetpb.Target) bool {
 	return true
 }
 
-func (t *TargetState) connect() {
+func (t *TargetState) doConnect() {
 	t.connecting = true
 	t.config.Log.Info().Msgf("Connecting to target %s", t.name)
 	query, err := client.NewQuery(t.request)
@@ -106,7 +110,7 @@ func (t *TargetState) connect() {
 		InsecureSkipVerify: true,
 	}
 
-	query.Target = t.name
+	query.Target = t.queryTarget
 	query.Timeout = t.config.TargetDialTimeout
 
 	query.ProtoHandler = t.handleUpdate
@@ -119,6 +123,23 @@ func (t *TargetState) connect() {
 	// Subscribe blocks until .Close() is called
 	if err := t.client.Subscribe(context.Background(), query, gnmiclient.Type); err != nil {
 		t.config.Log.Error().Err(err).Msgf("Subscribe failed for targetCache %q: %v", t.name, err)
+	}
+}
+
+// Attempt to acquire a connection slot and connect to the target. If TargetState.disconnect() is called
+// all attempts and connections are aborted.
+func (t *TargetState) connect(connectionSlot *semaphore.Weighted) {
+	var connectionSlotAcquired = false
+	for !t.stopped {
+		if !connectionSlotAcquired {
+			connectionSlotAcquired = connectionSlot.TryAcquire(1)
+		}
+		if connectionSlotAcquired {
+			t.doConnect()
+		}
+	}
+	if connectionSlotAcquired {
+		connectionSlot.Release(1)
 	}
 }
 
@@ -138,7 +159,7 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted) {
 			}
 			if connectionLockAcquired {
 				t.config.Log.Info().Msgf("Lock acquired for target %s", t.name)
-				t.connect()
+				t.doConnect()
 			}
 		}
 	}
@@ -186,29 +207,35 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 	}
 	switch v := resp.Response.(type) {
 	case *gnmipb.SubscribeResponse_Update:
-		// Gracefully handle gNMI implementations that do not set Prefix.Target in their
-		// SubscribeResponse Updates.
-		if v.Update.GetPrefix() == nil {
-			v.Update.Prefix = &gnmipb.Path{}
-		}
-		if v.Update.Prefix.Target == "" {
-			v.Update.Prefix.Target = t.name
-		}
 		if t.rejectUpdate(v.Update) {
 			return nil
 		}
-		err := t.targetCache.GnmiUpdate(v.Update)
-		if err != nil {
-			// Some errors won't corrupt the cache so no need to return an error to the ProtoHandler caller. For these
-			// errors we just log them and move on.
-			switch err.Error() {
-			case "suppressed duplicate value":
-			case "update is stale":
-				t.config.Log.Warn().Msgf("%s: %+v", err, v.Update)
-			default:
-				return fmt.Errorf("targetCache cache update error: %v: %+v", err, v.Update)
+
+		switch t.queryTarget {
+		case "*":
+			targetCache := t.connManager.cache.GetTarget(v.Update.Prefix.Target)
+			if targetCache == nil {
+				targetCache = t.connManager.cache.Add(v.Update.Prefix.Target)
+			}
+			err := t.updateTargetCache(targetCache, v.Update)
+			if err != nil {
+				return err
+			}
+		default:
+			// Gracefully handle gNMI implementations that do not set Prefix.Target in their
+			// SubscribeResponse Updates.
+			if v.Update.GetPrefix() == nil {
+				v.Update.Prefix = &gnmipb.Path{}
+			}
+			if v.Update.Prefix.Target == "" && t.queryTarget != "*" {
+				v.Update.Prefix.Target = t.queryTarget
+			}
+			err := t.updateTargetCache(t.targetCache, v.Update)
+			if err != nil {
+				return err
 			}
 		}
+
 	case *gnmipb.SubscribeResponse_SyncResponse:
 		t.config.Log.Debug().Msgf("Target is synced: %s", t.name)
 		t.targetCache.Sync()
@@ -216,6 +243,22 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 		return fmt.Errorf("error in response: %s", v)
 	default:
 		return fmt.Errorf("unknown response %T: %v", v, v)
+	}
+	return nil
+}
+
+func (t *TargetState) updateTargetCache(cache *cache.Target, update *gnmipb.Notification) error {
+	err := cache.GnmiUpdate(update)
+	if err != nil {
+		// Some errors won't corrupt the cache so no need to return an error to the ProtoHandler caller. For these
+		// errors we just log them and move on.
+		switch err.Error() {
+		case "suppressed duplicate value":
+		case "update is stale":
+			t.config.Log.Warn().Msgf("%s: %+v", err, update)
+		default:
+			return fmt.Errorf("targetCache cache update error: %v: %+v", err, update)
+		}
 	}
 	return nil
 }

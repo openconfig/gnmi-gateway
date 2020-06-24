@@ -99,14 +99,27 @@ func (c *ConnectionManager) ReloadTargets() {
 						}
 					}
 					newTargets[name] = currentTargetState
+				} else if strings.HasPrefix(name, "*:") {
+					c.config.Log.Info().Msgf("Initializing wildcard target %s.", name)
+					newTargets[name] = &TargetState{
+						config:      c.config,
+						connManager: c,
+						name:        name,
+						queryTarget: "*",
+						target:      target,
+						request:     targetConfig.Request[target.Request],
+					}
+					go newTargets[name].connect(c.connLimit)
 				} else {
 					lockPath := strings.TrimRight(c.config.ZookeeperPrefix, "/") + "/target/" + name
 					// no previous targetCache existed
 					c.config.Log.Info().Msgf("Initializing target %s.", name)
 					newTargets[name] = &TargetState{
 						config:      c.config,
+						connManager: c,
 						lock:        locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, zk.WorldACL(zk.PermAll)),
 						name:        name,
+						queryTarget: name,
 						targetCache: c.cache.Add(name),
 						target:      target,
 						request:     targetConfig.Request[target.Request],
