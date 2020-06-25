@@ -121,14 +121,16 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		opts.TargetLoader = targets.NewJSONFileTargetLoader(g.config)
 	}
 
-	go func() {
-		err := opts.TargetLoader.Start()
-		if err != nil {
-			g.config.Log.Error().Err(err).Msgf("Unable to start target loader %T", opts.TargetLoader)
-			finished <- err
-		}
-		opts.TargetLoader.WatchConfiguration(connMgr.TargetConfigChan())
-	}()
+	if opts.TargetLoader != nil {
+		go func() {
+			err := opts.TargetLoader.Start()
+			if err != nil {
+				g.config.Log.Error().Err(err).Msgf("Unable to start target loader %T", opts.TargetLoader)
+				finished <- err
+			}
+			opts.TargetLoader.WatchConfiguration(connMgr.TargetConfigChan())
+		}()
+	}
 
 	if g.config.EnableServer {
 		g.config.Log.Info().Msg("Starting gNMI server.")
