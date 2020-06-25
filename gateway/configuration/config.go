@@ -16,6 +16,7 @@
 package configuration
 
 import (
+	"crypto/tls"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/credentials"
@@ -24,6 +25,8 @@ import (
 )
 
 type GatewayConfig struct {
+	// gNMI client TLS credentials. Setting this will enable client TLS.
+	ClientTLSConfig *tls.Config
 	// Enable GNMI Server
 	EnableServer bool
 	// Logger used by the Gateway code

@@ -111,10 +111,13 @@ func (t *TargetState) doConnect() {
 		}
 	}
 
-	// TLS is always enabled for a targetCache.
-	query.TLS = &tls.Config{
-		// Today, we assume that we should not verify the certificate from the targetCache.
-		InsecureSkipVerify: true,
+	// TLS is always enabled for targets but we won't verify certs if no client TLS config exists.
+	if t.config.ClientTLSConfig != nil {
+		query.TLS = t.config.ClientTLSConfig
+	} else {
+		query.TLS = &tls.Config{
+			InsecureSkipVerify: true,
+		}
 	}
 
 	query.Target = t.queryTarget
