@@ -133,7 +133,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	}
 
 	if g.config.EnableServer {
-		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%s.", g.config.ServerPort)
+		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerPort)
 		go func() {
 			if err := g.StartServer(connMgr.Cache()); err != nil {
 				g.config.Log.Error().Err(err).Msg("Unable to start gNMI server.")
