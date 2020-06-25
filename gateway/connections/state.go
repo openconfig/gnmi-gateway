@@ -78,11 +78,18 @@ func (t *TargetState) Equal(other *targetpb.Target) bool {
 			return false
 		}
 	}
-	if t.target.Credentials.Username != other.Credentials.Username {
+
+	if t.target.Credentials == nil && other.Credentials != nil || t.target.Credentials != nil && other.Credentials == nil {
 		return false
 	}
-	if t.target.Credentials.Password != other.Credentials.Password {
-		return false
+
+	if t.target.Credentials != nil && other.Credentials != nil {
+		if t.target.Credentials.Username != other.Credentials.Username {
+			return false
+		}
+		if t.target.Credentials.Password != other.Credentials.Password {
+			return false
+		}
 	}
 	return true
 }
