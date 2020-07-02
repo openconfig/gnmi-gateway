@@ -210,7 +210,9 @@ func (t *TargetState) reconnect() error {
 func (t *TargetState) handleUpdate(msg proto.Message) error {
 	//fmt.Printf("%+v\n", msg)
 	if !t.connected {
-		t.targetCache.Connect()
+		if t.queryTarget != "*" {
+			t.targetCache.Connect()
+		}
 		t.connected = true
 	}
 	resp, ok := msg.(*gnmipb.SubscribeResponse)
@@ -250,7 +252,12 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 
 	case *gnmipb.SubscribeResponse_SyncResponse:
 		t.config.Log.Debug().Msgf("Target is synced: %s", t.name)
-		t.targetCache.Sync()
+		switch t.queryTarget {
+		case "*":
+			// do nothing
+		default:
+			t.targetCache.Sync()
+		}
 	case *gnmipb.SubscribeResponse_Error:
 		return fmt.Errorf("error in response: %s", v)
 	default:
