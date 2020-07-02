@@ -76,20 +76,24 @@ func NewZookeeperNonBlockingLock(conn *zk.Conn, id string, member string, acl []
 	}
 }
 
-func (l *ZookeeperNonBlockingLock) GetMember(id string) (string, error) {
+func GetMember(conn *zk.Conn, id string) (string, error) {
 	trimmedID := "/" + strings.Trim(id, "/")
-	_, lowestSeqPath, err := l.lowestSeqChild(trimmedID)
+	_, lowestSeqPath, err := lowestSeqChild(conn, trimmedID)
 	if err != nil {
 		return "", fmt.Errorf("unable to find lowest sequence path: %s", err)
 	}
 	if lowestSeqPath == "" {
 		return "", nil
 	}
-	data, _, err := l.conn.Get(lowestSeqPath)
+	data, _, err := conn.Get(lowestSeqPath)
 	if err != nil {
 		return "", fmt.Errorf("unable to retrieve lowest sequence child: %s", err)
 	}
 	return string(data), nil
+}
+
+func (l *ZookeeperNonBlockingLock) GetMember(id string) (string, error) {
+	return GetMember(l.conn, id)
 }
 
 func (l *ZookeeperNonBlockingLock) ID() string {
@@ -191,8 +195,8 @@ func (l *ZookeeperNonBlockingLock) createParentPath(path string) error {
 	return nil
 }
 
-func (l *ZookeeperNonBlockingLock) lowestSeqChild(path string) (int, string, error) {
-	children, _, err := l.conn.Children(path)
+func lowestSeqChild(conn *zk.Conn, path string) (int, string, error) {
+	children, _, err := conn.Children(path)
 	if err != nil {
 		return 0, "", err
 	}
@@ -210,6 +214,10 @@ func (l *ZookeeperNonBlockingLock) lowestSeqChild(path string) (int, string, err
 		}
 	}
 	return lowestSeq, lowestSeqPath, nil
+}
+
+func (l *ZookeeperNonBlockingLock) lowestSeqChild(path string) (int, string, error) {
+	return lowestSeqChild(l.conn, path)
 }
 
 func (l *ZookeeperNonBlockingLock) watchState() {
