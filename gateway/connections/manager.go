@@ -24,6 +24,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/locking"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -112,12 +113,13 @@ func (c *ConnectionManager) ReloadTargets() {
 					go newTargets[name].connect(c.connLimit)
 				} else {
 					lockPath := strings.TrimRight(c.config.ZookeeperPrefix, "/") + "/target/" + name
+					clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
 					// no previous targetCache existed
 					c.config.Log.Info().Msgf("Initializing target %s.", name)
 					newTargets[name] = &TargetState{
 						config:      c.config,
 						connManager: c,
-						lock:        locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, zk.WorldACL(zk.PermAll)),
+						lock:        locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll)),
 						name:        name,
 						queryTarget: name,
 						targetCache: c.cache.Add(name),
