@@ -13,6 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Copyright 2018 Google Inc.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Portions of this file including StartGNMIServer (excluding modifications) are from
+// https://github.com/openconfig/gnmi/blob/89b2bf29312cda887da916d0f3a32c1624b7935f/cmd/gnmi_collector/gnmi_collector.go
+
 // Package gateway provides an easily configurable server that can connect to multiple gNMI targets (devices) and
 // relay received messages to various exporters and to downstream gNMI clients.
 //
@@ -45,13 +59,20 @@
 package gateway
 
 import (
+	"context"
+	"fmt"
+	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/proto/gnmi"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"net"
 	_ "net/http/pprof"
 	"os"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/server"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/targets"
 	"sync"
 )
@@ -133,9 +154,9 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	}
 
 	if g.config.EnableServer {
-		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerPort)
+		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerListenPort)
 		go func() {
-			if err := g.StartServer(connMgr.Cache()); err != nil {
+			if err := g.StartGNMIServer(connMgr.Cache()); err != nil {
 				g.config.Log.Error().Err(err).Msg("Unable to start gNMI server.")
 				finished <- err
 			}
@@ -166,4 +187,44 @@ func (g *Gateway) sendUpdateToClients(leaf *ctree.Leaf) {
 
 func (g *Gateway) SendNotificationToClients(n *gnmi.Notification) {
 	g.sendUpdateToClients(ctree.DetachedLeaf(n))
+}
+
+// StartGNMIServer will start the gNMI server that serves the Subscribe interface to downstream gNMI clients.
+func (g *Gateway) StartGNMIServer(c *cache.Cache) error {
+	if g.config.ServerTLSCreds == nil {
+		if g.config.ServerTLSCert == "" || g.config.ServerTLSKey == "" {
+			return fmt.Errorf("no TLS creds; you must specify a TLS cert and key")
+		}
+
+		// Initialize TLS credentials.
+		creds, err := credentials.NewServerTLSFromFile(g.config.ServerTLSCert, g.config.ServerTLSKey)
+		if err != nil {
+			return fmt.Errorf("failed to generate credentials: %v", err)
+		}
+		g.config.ServerTLSCreds = creds
+	}
+
+	// Create a grpc Server.
+	srv := grpc.NewServer(grpc.Creds(g.config.ServerTLSCreds))
+	// Initialize gNMI Proxy Subscribe server.
+	subscribeSrv, err := server.NewServer(c)
+	if err != nil {
+		return fmt.Errorf("Could not instantiate gNMI server: %v", err)
+	}
+	gnmi.RegisterGNMIServer(srv, subscribeSrv)
+	// Forward streaming updates to clients.
+	g.AddClient(subscribeSrv.Update)
+	// Register listening port and start serving.
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", g.config.ServerListenPort))
+	if err != nil {
+		return fmt.Errorf("failed to listen: %v", err)
+	}
+	go func() {
+		err := srv.Serve(lis) // blocks
+		g.config.Log.Error().Err(err).Msg("Error running gNMI server.")
+	}()
+	defer srv.Stop()
+	ctx := context.Background()
+	<-ctx.Done()
+	return ctx.Err()
 }
