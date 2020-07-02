@@ -55,7 +55,9 @@ import (
 type ZookeeperNonBlockingLock struct {
 	acquired bool
 	conn     *zk.Conn
-	path     string
+	// The member that is holding the lock. This is usually the address and port where the cluster member is reachable.
+	member   string
+	id       string
 	acl      []zk.ACL
 	lockPath string
 	seq      int
@@ -64,13 +66,34 @@ type ZookeeperNonBlockingLock struct {
 // NewZookeeperNonBlockingLock creates a new lock instance using the provided connection, path, and acl.
 // The path must be a node that is only used by this lock. A lock instances starts
 // unlocked until Try() is called.
-func NewZookeeperNonBlockingLock(conn *zk.Conn, path string, acl []zk.ACL) NonBlockingLocker {
-	trimmedPath := "/" + strings.Trim(path, "/")
+func NewZookeeperNonBlockingLock(conn *zk.Conn, id string, member string, acl []zk.ACL) DistributedLocker {
+	trimmedID := "/" + strings.Trim(id, "/")
 	return &ZookeeperNonBlockingLock{
-		conn: conn,
-		path: trimmedPath,
-		acl:  acl,
+		conn:   conn,
+		member: member,
+		id:     trimmedID,
+		acl:    acl,
 	}
+}
+
+func (l *ZookeeperNonBlockingLock) GetMember(id string) (string, error) {
+	trimmedID := "/" + strings.Trim(id, "/")
+	_, lowestSeqPath, err := l.lowestSeqChild(trimmedID)
+	if err != nil {
+		return "", fmt.Errorf("unable to find lowest sequence path: %s", err)
+	}
+	if lowestSeqPath == "" {
+		return "", nil
+	}
+	data, _, err := l.conn.Get(lowestSeqPath)
+	if err != nil {
+		return "", fmt.Errorf("unable to retrieve lowest sequence child: %s", err)
+	}
+	return string(data), nil
+}
+
+func (l *ZookeeperNonBlockingLock) ID() string {
+	return l.id
 }
 
 func parseSeq(path string) (int, error) {
@@ -86,51 +109,38 @@ func (l *ZookeeperNonBlockingLock) Try() (bool, error) {
 		if l.acquired {
 			go l.watchState()
 		}
+		return l.acquired, err
 	}
-	return l.acquired, err
+	return false, fmt.Errorf("not connected to Zookeeper")
 }
 
-// Lock attempts to acquire the lock. It will wait to return until the lock
-// is acquired or an error occurs. If this instance already has the lock
+// Lock attempts to acquire the lock. It will return false if the lock
+// is not acquired or an error occurs. If this instance already has the lock
 // then ErrDeadlock is returned.
 func (l *ZookeeperNonBlockingLock) try() (bool, error) {
 	if l.lockPath != "" {
 		return true, zk.ErrDeadlock
 	}
 
-	prefix := fmt.Sprintf("%s/lock-", l.path)
+	prefix := fmt.Sprintf("%s/lock-", l.id)
 
-	path := ""
-	var err error
-	for i := 0; i < 3; i++ {
-		path, err = l.conn.CreateProtectedEphemeralSequential(prefix, []byte{}, l.acl)
-		if err == zk.ErrNoNode {
-			// Create parent node.
-			parts := strings.Split(l.path, "/")
-			pth := ""
-			for _, p := range parts[1:] {
-				var exists bool
-				pth += "/" + p
-				exists, _, err = l.conn.Exists(pth)
-				if err != nil {
-					return false, err
-				}
-				if exists == true {
-					continue
-				}
-				_, err = l.conn.Create(pth, []byte{}, 0, l.acl)
-				if err != nil && err != zk.ErrNodeExists {
-					return false, err
-				}
-			}
-		} else if err == nil {
-			break
-		} else {
-			return false, err
+	// Attempt to add a sequence to the tree
+	path, err := l.conn.CreateProtectedEphemeralSequential(prefix, []byte(l.member), l.acl)
+
+	if err == zk.ErrNoNode {
+		// Create parent node.
+		err = l.createParentPath(prefix)
+		if err != nil {
+			return false, fmt.Errorf("unable to create parent node path: %v", err)
 		}
-	}
-	if err != nil {
-		return false, err
+
+		// Re attempt to add a sequence now that the parent exists
+		path, err = l.conn.CreateProtectedEphemeralSequential(prefix, []byte(l.member), l.acl)
+		if err != nil {
+			return false, fmt.Errorf("unable to create node after parent path created: %v", err)
+		}
+	} else if err != nil {
+		return false, fmt.Errorf("unable to add sequence to tree: %v", err)
 	}
 
 	seq, err := parseSeq(path)
@@ -138,54 +148,68 @@ func (l *ZookeeperNonBlockingLock) try() (bool, error) {
 		return false, err
 	}
 
-	for {
-		children, _, err := l.conn.Children(l.path)
-		if err != nil {
-			return false, err
-		}
-
-		lowestSeq := seq
-		prevSeq := -1
-		prevSeqPath := ""
-		for _, p := range children {
-			s, err := parseSeq(p)
-			if err != nil {
-				return false, err
-			}
-			if s < lowestSeq {
-				lowestSeq = s
-			}
-			if s < seq && s > prevSeq {
-				prevSeq = s
-				prevSeqPath = p
-			}
-		}
-
-		if seq == lowestSeq {
-			// Acquired the lock
-			break
-		}
-
-		// Wait on the node next in line for the lock
-		_, _, ch, err := l.conn.GetW(l.path + "/" + prevSeqPath)
-		if err != nil && err != zk.ErrNoNode {
-			return false, err
-		} else if err != nil && err == zk.ErrNoNode {
-			// couldn't get the lock
-			return false, nil
-		}
-
-		if ch != nil {
-			ev := <-ch
-			if ev.Err != nil {
-				return false, ev.Err
-			}
-		}
+	lowestSeq, _, err := l.lowestSeqChild(l.id)
+	if err != nil {
+		return false, err
 	}
 
+	if seq != lowestSeq {
+		// Did not acquire the lock
+		if err := l.conn.Delete(path, -1); err != nil {
+			return false, fmt.Errorf("unable to remove unacquired lock cleanly: %s", err)
+		}
+		return false, nil
+	}
+	// Acquired the lock
 	l.seq = seq
 	l.lockPath = path
 	return true, nil
+}
+
+func (l *ZookeeperNonBlockingLock) createParentPath(path string) error {
+	parts := strings.Split(path, "/")
+	pth := ""
+	for _, p := range parts[:len(parts)-1] {
+		if p == "" {
+			continue
+		}
+
+		var exists bool
+		pth += "/" + p
+		exists, _, err := l.conn.Exists(pth)
+		if err != nil {
+			return err
+		}
+		if exists == true {
+			continue
+		}
+		_, err = l.conn.Create(pth, []byte{}, 0, l.acl)
+		if err != nil && err != zk.ErrNodeExists {
+			return err
+		}
+	}
+	return nil
+}
+
+func (l *ZookeeperNonBlockingLock) lowestSeqChild(path string) (int, string, error) {
+	children, _, err := l.conn.Children(path)
+	if err != nil {
+		return 0, "", err
+	}
+
+	lowestSeq := -1
+	lowestSeqPath := ""
+	for _, childPath := range children {
+		childSeq, err := parseSeq(childPath)
+		if err != nil {
+			return 0, "", err
+		}
+		if lowestSeq == -1 || childSeq < lowestSeq {
+			lowestSeq = childSeq
+			lowestSeqPath = path + "/" + childPath
+		}
+	}
+	return lowestSeq, lowestSeqPath, nil
 }
 
 func (l *ZookeeperNonBlockingLock) watchState() {
@@ -208,8 +232,7 @@ func (l *ZookeeperNonBlockingLock) Unlock() error {
 		return zk.ErrNotLocked
 	}
 	if err := l.conn.Delete(l.lockPath, -1); err != nil {
-		//log.Error().Err(err).Msg("Unable to release lock gracefully.")
-		return err
+		return fmt.Errorf("unable to release lock gracefully: %s", err)
 	}
 	l.released()
 	//log.Info().Msg("Cluster lock released.")

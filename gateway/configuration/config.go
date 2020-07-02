@@ -33,8 +33,14 @@ type GatewayConfig struct {
 	Log zerolog.Logger
 	// OpenConfig Models 'public' folder location
 	OpenConfigDirectory string
-	// Port to server the gNMI server on
+	// ServerAddress is the address where other cluster members can reach the gNMI server. The first assigned IP address
+	// is used if the parameter is not provided.
+	ServerAddress string
+	// ServerPort is the TCP port where other cluster members can reach the gNMI server. ServerListenPort is used if the
+	// parameter is not provided.
 	ServerPort int
+	// ServerListenPort is the TCP port the gNMI server will listen on.
+	ServerListenPort int
 	// gNMI Server TLS credentials. You must specify either this or both ServerTLSCert & ServerTLSKey if you -EnableServer
 	ServerTLSCreds credentials.TransportCredentials
 	// gNMI Server TLS Cert

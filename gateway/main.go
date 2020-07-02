@@ -91,7 +91,7 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	// Configuration Parameters
 	flag.BoolVar(&config.EnableServer, "EnableServer", false, "Enable the gNMI server")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
-	flag.IntVar(&config.ServerPort, "ServerPort", 9339, "TCP port to run the gNMI server on (default: 9339)")
+	flag.IntVar(&config.ServerListenPort, "ServerListenPort", 9339, "TCP port to run the gNMI server on (default: 9339)")
 	flag.StringVar(&config.ServerTLSCert, "ServerTLSCert", "", "File containing the gNMI server TLS certificate (required to enable the gNMI server)")
 	flag.StringVar(&config.ServerTLSKey, "ServerTLSKey", "", "File containing the gNMI server TLS key (required to enable the gNMI server)")
 	flag.StringVar(&config.TargetJSONFile, "TargetJSONFile", "", "JSON file containing the target configurations")

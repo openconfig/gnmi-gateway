@@ -49,7 +49,7 @@ import (
 type TargetState struct {
 	config      *configuration.GatewayConfig
 	connManager *ConnectionManager
-	lock        locking.NonBlockingLocker
+	lock        locking.DistributedLocker
 	// The unique name of the target that is being connected to
 	name string
 	// Usually the target name but could be "*"

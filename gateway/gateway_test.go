@@ -29,7 +29,7 @@ func Example() {
 	config := &configuration.GatewayConfig{
 		EnableServer:                 true,
 		OpenConfigDirectory:          "./oc-models",
-		ServerPort:                   2906,
+		ServerListenPort:             2906,
 		ServerTLSCert:                "server.crt",
 		ServerTLSKey:                 "server.key",
 		TargetJSONFile:               "targets.json",

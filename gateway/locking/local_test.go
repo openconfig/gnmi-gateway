@@ -24,7 +24,12 @@ import (
 func TestNonBlockingLock_Try(t *testing.T) {
 	assertion := assert.New(t)
 
-	lock := locking.NewNonBlockingLock()
-	assertion.True(lock.Try())
-	assertion.False(lock.Try())
+	lock := locking.NewNonBlockingLock("test-id-12345", "127.0.0.1:0")
+	acquired, err := lock.Try()
+	assertion.True(acquired)
+	assertion.NoError(err)
+
+	acquired, err = lock.Try()
+	assertion.True(acquired)
+	assertion.Errorf(err, "should have a deadlock error")
 }

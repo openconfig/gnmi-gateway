@@ -15,30 +15,15 @@
 
 package locking
 
-import (
-	"golang.org/x/sync/semaphore"
-)
-
-type NonBlockingLocker interface {
+// DistributedLocker is an interface for creating non-blocking locks among distributed processes.
+type DistributedLocker interface {
+	// Try to acquire the lock. If the lock is already acquired return true and a deadlock error.
 	Try() (bool, error)
+	// Unlock the lock.
 	Unlock() error
-}
-
-type NonBlockingLock struct {
-	sem *semaphore.Weighted
-}
-
-func NewNonBlockingLock() NonBlockingLocker {
-	return &NonBlockingLock{
-		sem: semaphore.NewWeighted(1),
-	}
-}
-
-func (l *NonBlockingLock) Try() (bool, error) {
-	return l.sem.TryAcquire(1), nil
-}
-
-func (l *NonBlockingLock) Unlock() error {
-	l.sem.Release(1)
-	return nil
+	// Return the ID for this lock.
+	ID() string
+	// Get the member that currently has the lock for the ID, if it's currently locked, otherwise return an
+	// empty string.
+	GetMember(id string) (string, error)
 }
