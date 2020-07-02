@@ -91,3 +91,36 @@ func TestZookeeperNonBlockingLock_Try(t *testing.T) {
 	err = lock.Unlock()
 	assertion.Error(err, "should not be able to unlock an un-acquired lock")
 }
+
+func TestZookeeperNonBlockingLock_GetMember(t *testing.T) {
+	assertion := assert.New(t)
+
+	conn, err := connectToZK()
+	assertion.NoError(err)
+
+	lock_one := locking.NewZookeeperNonBlockingLock(conn, ZookeeperIntegrationTestID, ZookeeperIntegrationTestMember, zk.WorldACL(zk.PermAll))
+	assertion.NotNil(lock_one)
+
+	lock_two := locking.NewZookeeperNonBlockingLock(conn, ZookeeperIntegrationTestID, strReverse(ZookeeperIntegrationTestMember), zk.WorldACL(zk.PermAll))
+	assertion.NotNil(lock_two)
+
+	acquired, err := lock_two.Try()
+	assertion.NoError(err)
+	assertion.True(acquired)
+
+	acquired, err = lock_one.Try()
+	assertion.NoError(err)
+	assertion.False(acquired)
+
+	member, err := lock_one.GetMember(ZookeeperIntegrationTestID)
+	assertion.NoError(err)
+	assertion.Equal(strReverse(ZookeeperIntegrationTestMember), member)
+}
+
+func strReverse(in string) string {
+	out := ""
+	for i := range in {
+		out += string(in[len(in)-i-1])
+	}
+	return out
+}

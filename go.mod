@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.1
+	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.3.3
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/openconfig/gnmi v0.0.0-20190823184014-89b2bf29312c
