@@ -72,7 +72,7 @@ func Main() {
 	gateway := NewGateway(config)
 	err = gateway.StartGateway(opts) // run forever (or until an error happens)
 	if err != nil {
-		config.Log.Error().Err(err).Msgf("Gateway exited with an error: %v", err)
+		config.Log.Error().Msgf("Gateway exited with an error: %v", err)
 		os.Exit(1)
 	}
 }

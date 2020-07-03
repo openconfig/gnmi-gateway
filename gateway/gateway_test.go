@@ -42,7 +42,7 @@ func Example() {
 
 	gateway := NewGateway(config)
 	err := gateway.StartGateway(&StartOpts{
-		TargetLoader: targets.NewJSONFileTargetLoader(config),
+		TargetLoaders: []targets.TargetLoader{targets.NewJSONFileTargetLoader(config)},
 		Exporters: []exporters.Exporter{
 			exporters.NewPrometheusExporter(config),
 		},

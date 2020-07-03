@@ -47,26 +47,28 @@ import (
 // TargetState makes the calls to connect a target, tracks any associated connection state, and is the container for
 // the target's cache data. It is created once for every device and used as a closure parameter by ProtoHandler.
 type TargetState struct {
-	config      *configuration.GatewayConfig
-	connManager *ConnectionManager
-	lock        locking.DistributedLocker
+	ConnectionLockAcquired bool
+	config                 *configuration.GatewayConfig
+	client                 *client.ReconnectClient
+	connManager            *ConnectionManager
+	// lock is the distributed lock that must be acquired before a connection is made if .connectWithLock() is called
+	lock locking.DistributedLocker
 	// The unique name of the target that is being connected to
 	name string
 	// Usually the target name but could be "*"
 	queryTarget string
 	targetCache *cache.Target
+	target      *targetpb.Target
+	request     *gnmipb.SubscribeRequest
 	// connected status is set to true when the first gnmi notification is received.
 	// it gets reset to false when disconnect call back of ReconnectClient is called.
 	connected bool
 	// connecting status is used to signal that some of the connection process has been started and
 	// full reconnection is necessary if the target configuration changes
 	connecting bool
-	client     *client.ReconnectClient
 	// stopped status signals that .disconnect() has been called we no longer want to connect to this target so we
 	// should stop trying to connect and release any locks that are being held
 	stopped bool
-	target  *targetpb.Target
-	request *gnmipb.SubscribeRequest
 }
 
 func (t *TargetState) Equal(other *targetpb.Target) bool {
@@ -111,7 +113,7 @@ func (t *TargetState) doConnect() {
 		}
 	}
 
-	// TLS is always enabled for targets but we won't verify certs if no client TLS config exists.
+	// TLS is always enabled for localTargets but we won't verify certs if no client TLS config exists.
 	if t.config.ClientTLSConfig != nil {
 		query.TLS = t.config.ClientTLSConfig
 	} else {
@@ -158,16 +160,15 @@ func (t *TargetState) connect(connectionSlot *semaphore.Weighted) {
 // all attempts and connections are aborted.
 func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted) {
 	var connectionSlotAcquired = false
-	var connectionLockAcquired = false
 	for !t.stopped {
 		if !connectionSlotAcquired {
 			connectionSlotAcquired = connectionSlot.TryAcquire(1)
 		}
 		if connectionSlotAcquired {
-			if !connectionLockAcquired {
-				connectionLockAcquired, _ = t.lock.Try()
+			if !t.ConnectionLockAcquired {
+				t.ConnectionLockAcquired, _ = t.lock.Try()
 			}
-			if connectionLockAcquired {
+			if t.ConnectionLockAcquired {
 				t.config.Log.Info().Msgf("Lock acquired for target %s", t.name)
 				t.doConnect()
 			}
@@ -176,11 +177,12 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted) {
 	if connectionSlotAcquired {
 		connectionSlot.Release(1)
 	}
-	if connectionLockAcquired {
+	if t.ConnectionLockAcquired {
 		err := t.lock.Unlock()
 		if err != nil {
 			t.config.Log.Warn().Err(err).Msgf("error while releasing lock for target %s: %v", t.name, err)
 		}
+		t.ConnectionLockAcquired = false
 	}
 }
 

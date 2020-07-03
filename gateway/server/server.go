@@ -1,3 +1,18 @@
+// Copyright 2020 Netflix Inc
+// Author: Colin McIntosh (colin@netflix.com)
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /*
 Copyright 2017 Google Inc.
 
@@ -23,7 +38,11 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/clustering"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 	"time"
 
 	log "github.com/golang/glog"
@@ -34,6 +53,7 @@ import (
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/match"
 	"github.com/openconfig/gnmi/path"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/unimplemented"
 	"github.com/openconfig/gnmi/value"
 	"google.golang.org/grpc/codes"
@@ -79,19 +99,36 @@ type ACL interface {
 type Server struct {
 	unimplemented.Server // Stub out all RPCs except Subscribe.
 
-	c *cache.Cache // The cache queries are performed against.
-	m *match.Match // Structure to match updates against active subscriptions.
-	a ACL          // server ACL.
+	c       *cache.Cache // The cache queries are performed against.
+	m       *match.Match // Structure to match updates against active subscriptions.
+	a       ACL          // server ACL.
+	config  *configuration.GatewayConfig
+	connMgr *connections.ConnectionManager
+	cluster clustering.Cluster
 	// subscribeSlots is a channel of size SubscriptionLimit to restrict how many
 	// queries are in flight.
 	subscribeSlots chan struct{}
 	timeout        time.Duration
 }
 
+type GNMIServerOpts struct {
+	Config  *configuration.GatewayConfig
+	Cache   *cache.Cache
+	Cluster clustering.Cluster
+	ConnMgr *connections.ConnectionManager
+}
+
 // NewServer instantiates server to handle client queries.  The cache should be
 // already instantiated.
-func NewServer(c *cache.Cache) (*Server, error) {
-	s := &Server{c: c, m: match.New(), timeout: Timeout}
+func NewServer(opts *GNMIServerOpts) (*Server, error) {
+	s := &Server{
+		c:       opts.Cache,
+		m:       match.New(),
+		config:  opts.Config,
+		cluster: opts.Cluster,
+		connMgr: opts.ConnMgr,
+		timeout: Timeout,
+	}
 	if SubscriptionLimit > 0 {
 		s.subscribeSlots = make(chan struct{}, SubscriptionLimit)
 	}
@@ -134,8 +171,8 @@ func addSubscription(m *match.Match, s *pb.SubscriptionList, c *matchClient) (re
 			continue
 		}
 		// TODO(yusufsn) : Origin field in the Path may need to be included
-		path := append(prefix, path.ToStrings(p.Path, false)...)
-		removes = append(removes, m.AddQuery(path, c))
+		p := append(prefix, path.ToStrings(p.Path, false)...)
+		removes = append(removes, m.AddQuery(p, c))
 	}
 	return func() {
 		for _, remove := range removes {
@@ -174,17 +211,27 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 
 	c.target = c.sr.GetSubscribe().GetPrefix().GetTarget()
 	if !s.c.HasTarget(c.target) {
-
-		// Look in Zookeeper
-
 		return status.Errorf(codes.NotFound, "no such target: %q", c.target)
 	}
 
-	peer, _ := peer.FromContext(stream.Context())
+	ctxPeer, _ := peer.FromContext(stream.Context())
 	mode := c.sr.GetSubscribe().Mode
 
-	log.Infof("peer: %v target: %q subscription: %s", peer.Addr, c.target, c.sr)
-	defer log.Infof("peer: %v target %q subscription: end: %q", peer.Addr, c.target, c.sr)
+	var clusterMember = false
+	// Check if peer is a cluster member
+	memberList, err := s.cluster.MemberList()
+	if err != nil {
+		return fmt.Errorf("unable to retrieve current cluster member list: %v", err)
+	}
+
+	if stringInSlice(ctxPeer.Addr.String(), memberList) {
+		clusterMember = true
+		log.Infof("subscribe: cluster member peer: %v target: %q subscription: %s", ctxPeer.Addr, c.target, c.sr)
+		defer log.Infof("subscribe: cluster member peer: %v target %q subscription: end: %q", ctxPeer.Addr, c.target, c.sr)
+	} else {
+		log.Infof("subscribe: client: %v target: %q subscription: %s", ctxPeer.Addr, c.target, c.sr)
+		defer log.Infof("subscribe: client: %v target %q subscription: end: %q", ctxPeer.Addr, c.target, c.sr)
+	}
 
 	c.queue = coalesce.NewQueue()
 	defer c.queue.Close()
@@ -209,7 +256,10 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 		go s.processPollingSubscription(&c)
 	case pb.SubscriptionList_STREAM:
 		if c.sr.GetSubscribe().GetUpdatesOnly() {
-			c.queue.Insert(syncMarker{})
+			_, err = c.queue.Insert(syncMarker{})
+			if err != nil {
+				return fmt.Errorf("unable to insert sync marker: %v", err)
+			}
 		}
 		remove := addSubscription(s.m, c.sr.GetSubscribe(),
 			&matchClient{acl: c.acl, q: c.queue})
@@ -221,7 +271,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 		return status.Errorf(codes.InvalidArgument, "Subscription mode %v not recognized", mode)
 	}
 
-	go s.sendStreamingResults(&c)
+	go s.sendStreamingResults(&c, s.connMgr, clusterMember)
 
 	return <-errC
 }
@@ -295,6 +345,8 @@ type streamClient struct {
 
 // processSubscription walks the cache tree and inserts all of the matching
 // nodes into the coalesce queue followed by a subscriptionSync response.
+// If the clusterMember flag is true only matching nodes that were sourced
+// locally will be forwarded.
 func (s *Server) processSubscription(c *streamClient) {
 	var err error
 	log.V(2).Infof("start processSubscription for %p", c)
@@ -332,12 +384,13 @@ func (s *Server) processSubscription(c *streamClient) {
 				return
 			}
 			// Note that fullPath doesn't contain target name as the first element.
-			s.c.Query(c.target, fullPath, func(_ []string, l *ctree.Leaf, _ interface{}) {
+			var queryError error
+			queryError = s.c.Query(c.target, fullPath, func(_ []string, l *ctree.Leaf, val interface{}) {
 				// Stop processing query results on error.
-				if err != nil {
+				if queryError != nil {
 					return
 				}
-				_, err = c.queue.Insert(l)
+				_, queryError = c.queue.Insert(l)
 			})
 			if err != nil {
 				return
@@ -375,9 +428,9 @@ func (s *Server) processPollingSubscription(c *streamClient) {
 
 // sendStreamingResults forwards all streaming updates to a given streaming
 // Subscription RPC client.
-func (s *Server) sendStreamingResults(c *streamClient) {
+func (s *Server) sendStreamingResults(c *streamClient, connMgr *connections.ConnectionManager, clusterMember bool) {
 	ctx := c.stream.Context()
-	peer, _ := peer.FromContext(ctx)
+	ctxPeer, _ := peer.FromContext(ctx)
 	t := time.NewTimer(s.timeout)
 	// Make sure the timer doesn't expire waiting for a value to send, only
 	// waiting to send.
@@ -390,7 +443,7 @@ func (s *Server) sendStreamingResults(c *streamClient) {
 		case <-t.C:
 			err := errors.New("subscription timed out while sending")
 			c.errC <- err
-			log.Errorf("%v : %v", peer, err)
+			log.Errorf("%v : %v", ctxPeer, err)
 		case <-done:
 		}
 	}()
@@ -418,6 +471,19 @@ func (s *Server) sendStreamingResults(c *streamClient) {
 		if !ok || n == nil {
 			c.errC <- status.Errorf(codes.Internal, "invalid cache node: %#v", item)
 			return
+		}
+
+		if clusterMember {
+			notification, ok := n.Value().(*gnmipb.Notification)
+			if !ok || notification == nil {
+				c.errC <- status.Errorf(codes.Internal, "invalid notification type: %#v", item)
+				return
+			}
+			target := notification.GetPrefix().GetTarget()
+			if !connMgr.HasLocalTargetLock(target) {
+				// Only forward messages to cluster members if we have a local lock for the target
+				return
+			}
 		}
 
 		if err = s.sendSubscribeResponse(&resp{
@@ -487,4 +553,13 @@ func MakeSubscribeResponse(n interface{}, dup uint32) (*pb.SubscribeResponse, er
 	}
 
 	return response, nil
+}
+
+func stringInSlice(s string, list []string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }

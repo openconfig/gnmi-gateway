@@ -29,12 +29,13 @@ import (
 	"sync"
 )
 
-func NewConnectionManagerDefault(config *configuration.GatewayConfig) (*ConnectionManager, error) {
+func NewConnectionManagerDefault(config *configuration.GatewayConfig, zkConn *zk.Conn) (*ConnectionManager, error) {
 	mgr := ConnectionManager{
 		config:            config,
 		connLimit:         semaphore.NewWeighted(int64(config.TargetLimit)),
 		targets:           make(map[string]*TargetState),
 		targetsConfigChan: make(chan *targetpb.Configuration, 1),
+		zkConn:            zkConn,
 	}
 	cache.Type = cache.GnmiNoti
 	mgr.cache = cache.New(nil)
@@ -55,11 +56,21 @@ func (c *ConnectionManager) Cache() *cache.Cache {
 	return c.cache
 }
 
+func (c *ConnectionManager) HasLocalTargetLock(target string) bool {
+	c.targetsMutex.Lock()
+	targetState, exists := c.targets[target]
+	c.targetsMutex.Unlock()
+	if !exists || !targetState.ConnectionLockAcquired {
+		return false
+	}
+	return true
+}
+
 func (c *ConnectionManager) TargetConfigChan() chan *targetpb.Configuration {
 	return c.targetsConfigChan
 }
 
-// Receives TargetConfiguration from the TargetConfigChan and connects/reconnects to targets.
+// Receives TargetConfiguration from the TargetConfigChan and connects/reconnects to local targets.
 func (c *ConnectionManager) ReloadTargets() {
 	for {
 		select {
@@ -112,7 +123,7 @@ func (c *ConnectionManager) ReloadTargets() {
 					}
 					go newTargets[name].connect(c.connLimit)
 				} else {
-					lockPath := strings.TrimRight(c.config.ZookeeperPrefix, "/") + "/target/" + name
+					lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, name)
 					clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
 					// no previous targetCache existed
 					c.config.Log.Info().Msgf("Initializing target %s.", name)
@@ -126,7 +137,11 @@ func (c *ConnectionManager) ReloadTargets() {
 						target:      target,
 						request:     targetConfig.Request[target.Request],
 					}
-					go newTargets[name].connectWithLock(c.connLimit)
+					if c.zkConn != nil {
+						go newTargets[name].connectWithLock(c.connLimit)
+					} else {
+						go newTargets[name].connect(c.connLimit)
+					}
 				}
 			}
 
@@ -138,39 +153,10 @@ func (c *ConnectionManager) ReloadTargets() {
 }
 
 func (c *ConnectionManager) Start() error {
-	c.config.Log.Info().Msgf("Connecting to Zookeeper hosts: %v.", strings.Join(c.config.ZookeeperHosts, ", "))
-	newConn, eventChan, err := zk.Connect(c.config.ZookeeperHosts, c.config.ZookeeperTimeout)
-	if err != nil {
-		c.config.Log.Error().Err(err).Msgf("Unable to connect to Zookeeper: %v", err)
-		return err
-	}
-	c.zkConn = newConn
-	go zookeeperEventHandler(eventChan)
-	c.config.Log.Info().Msg("Zookeeper connected.")
 	go c.ReloadTargets()
 	return nil
 }
 
-func zookeeperEventHandler(zkEventChan <-chan zk.Event) {
-	for {
-		select {
-		case event := <-zkEventChan:
-			if event.State != zk.StateUnknown {
-				switch event.State {
-				case zk.StateConnected:
-					log.Info().Msg("Connected to Zookeeper.")
-				case zk.StateConnecting:
-					log.Info().Msg("Attempting to connect to Zookeeper.")
-					//c.LockAcquired = false
-				case zk.StateDisconnected:
-					log.Info().Msg("Zookeeper disconnected.")
-					//c.LockAcquired = false
-				case zk.StateHasSession:
-					log.Info().Msg("Zookeeper session established.")
-				default:
-					log.Info().Msgf("Got Zookeeper state update: %v", event.State.String())
-				}
-			}
-		}
-	}
+func MakeTargetLockPath(prefix string, target string) string {
+	return strings.TrimRight(prefix, "/") + "/target/" + target
 }

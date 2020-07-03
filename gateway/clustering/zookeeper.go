@@ -13,18 +13,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package connections
+package clustering
 
 import (
-	"github.com/stretchr/testify/assert"
+	"github.com/samuel/go-zookeeper/zk"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
-	"testing"
 )
 
-func TestNewConnectionManagerDefault(t *testing.T) {
-	assertion := assert.New(t)
+type ZookeeperCluster struct {
+	config *configuration.GatewayConfig
+	conn   *zk.Conn
+}
 
-	mgr, err := NewConnectionManagerDefault(&configuration.GatewayConfig{}, nil)
-	assertion.NoError(err)
-	assertion.NotNil(mgr)
+func NewZookeeperCluster(config *configuration.GatewayConfig, conn *zk.Conn) *ZookeeperCluster {
+	return &ZookeeperCluster{
+		config: config,
+		conn:   conn,
+	}
+}
+
+func (z *ZookeeperCluster) Register(string) error {
+	panic("implement me")
+}
+
+func (z *ZookeeperCluster) MemberChangeCallback(func(add string, remove string)) {
+	panic("implement me")
+}
+
+func (z *ZookeeperCluster) MemberList() ([]string, error) {
+	panic("implement me")
 }

@@ -60,20 +60,24 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/samuel/go-zookeeper/zk"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"net"
 	_ "net/http/pprof"
 	"os"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/clustering"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/server"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/targets"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -95,13 +99,15 @@ var (
 type Gateway struct {
 	clientLock sync.Mutex
 	clients    []func(leaf *ctree.Leaf)
+	cluster    clustering.Cluster
 	config     *configuration.GatewayConfig
+	zkConn     *zk.Conn
 }
 
 // StartOpts is passed to StartGateway() and is used to set the running configuration
 type StartOpts struct {
 	// Loader for targets
-	TargetLoader targets.TargetLoader
+	TargetLoaders []targets.TargetLoader
 	// Exporters to run
 	Exporters []exporters.Exporter
 }
@@ -124,7 +130,29 @@ func (g *Gateway) AddClient(newClient func(leaf *ctree.Leaf)) {
 // primary way the server should be started.
 func (g *Gateway) StartGateway(opts *StartOpts) error {
 	g.config.Log.Info().Msg("Starting GNMI Gateway.")
-	connMgr, err := connections.NewConnectionManagerDefault(g.config)
+
+	// The finished channel to listens for errors from child goroutines.
+	// The first error will cause this function to return.
+	finished := make(chan error, 1)
+
+	var err error
+	if g.config.ZookeeperHosts != nil && len(g.config.ZookeeperHosts) > 0 {
+		if !g.config.EnableServer {
+			return errors.New("gNMI server is required for clustering: Set -EnableServer or disable clustering by removing -ZookeeperHosts")
+		}
+
+		g.zkConn, err = g.ConnectToZookeeper()
+		if err != nil {
+			g.config.Log.Error().Msgf("Unable to connect to Zookeeper: %v", err)
+			return err
+		}
+		g.cluster = clustering.NewZookeeperCluster(g.config, g.zkConn)
+		g.config.Log.Info().Msg("Clustering is enabled.")
+	} else {
+		g.config.Log.Info().Msg("Clustering is NOT enabled. No locking or cluster coordination will happen.")
+	}
+
+	connMgr, err := connections.NewConnectionManagerDefault(g.config, g.zkConn)
 	if err != nil {
 		g.config.Log.Error().Err(err).Msg("Unable to create connection manager.")
 		os.Exit(1)
@@ -134,33 +162,46 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		g.config.Log.Error().Err(err).Msgf("Unable to start connection manager: %v", err)
 		return err
 	}
-
-	// channel to listen for errors from child goroutines
-	finished := make(chan error, 1)
-
-	if g.config.TargetJSONFile != "" {
-		opts.TargetLoader = targets.NewJSONFileTargetLoader(g.config)
-	}
-
-	if opts.TargetLoader != nil {
-		go func() {
-			err := opts.TargetLoader.Start()
-			if err != nil {
-				g.config.Log.Error().Err(err).Msgf("Unable to start target loader %T", opts.TargetLoader)
-				finished <- err
-			}
-			opts.TargetLoader.WatchConfiguration(connMgr.TargetConfigChan())
-		}()
-	}
+	connMgr.Cache().SetClient(g.sendUpdateToClients)
 
 	if g.config.EnableServer {
 		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerListenPort)
 		go func() {
-			if err := g.StartGNMIServer(connMgr.Cache()); err != nil {
+			if err := g.StartGNMIServer(connMgr); err != nil {
 				g.config.Log.Error().Err(err).Msg("Unable to start gNMI server.")
 				finished <- err
 			}
 		}()
+	}
+
+	if g.cluster != nil {
+		go func() {
+			// TODO: check the gNMI server goroutine is serving before registering. Other cluster members may try to
+			//       connect before the gNMI server is up if we register too early.
+			clusterMember := g.config.ServerAddress + ":" + strconv.Itoa(g.config.ServerPort)
+			err := g.cluster.Register(clusterMember)
+			if err != nil {
+				finished <- fmt.Errorf("unable to register this cluster member '%s': %v", clusterMember, err)
+			} else {
+				g.config.Log.Info().Msgf("Registered this cluster member as '%s'", clusterMember)
+			}
+		}()
+		opts.TargetLoaders = append(opts.TargetLoaders, targets.NewClusterTargetLoader(g.config, g.cluster))
+	}
+
+	if g.config.TargetJSONFile != "" {
+		opts.TargetLoaders = append(opts.TargetLoaders, targets.NewJSONFileTargetLoader(g.config))
+	}
+
+	for _, loader := range opts.TargetLoaders {
+		go func(loader targets.TargetLoader) {
+			err := loader.Start()
+			if err != nil {
+				g.config.Log.Error().Err(err).Msgf("Unable to start target loader %T", loader)
+				finished <- err
+			}
+			loader.WatchConfiguration(connMgr.TargetConfigChan())
+		}(loader)
 	}
 
 	for _, exporter := range opts.Exporters {
@@ -173,8 +214,6 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 			g.AddClient(exporter.Export)
 		}(exporter)
 	}
-
-	connMgr.Cache().SetClient(g.sendUpdateToClients)
 
 	return <-finished
 }
@@ -190,7 +229,7 @@ func (g *Gateway) SendNotificationToClients(n *gnmi.Notification) {
 }
 
 // StartGNMIServer will start the gNMI server that serves the Subscribe interface to downstream gNMI clients.
-func (g *Gateway) StartGNMIServer(c *cache.Cache) error {
+func (g *Gateway) StartGNMIServer(connMgr *connections.ConnectionManager) error {
 	if g.config.ServerTLSCreds == nil {
 		if g.config.ServerTLSCert == "" || g.config.ServerTLSKey == "" {
 			return fmt.Errorf("no TLS creds; you must specify a TLS cert and key")
@@ -207,7 +246,13 @@ func (g *Gateway) StartGNMIServer(c *cache.Cache) error {
 	// Create a grpc Server.
 	srv := grpc.NewServer(grpc.Creds(g.config.ServerTLSCreds))
 	// Initialize gNMI Proxy Subscribe server.
-	subscribeSrv, err := server.NewServer(c)
+	gnmiServerOpts := &server.GNMIServerOpts{
+		Config:  g.config,
+		Cache:   connMgr.Cache(),
+		Cluster: g.cluster,
+		ConnMgr: connMgr,
+	}
+	subscribeSrv, err := server.NewServer(gnmiServerOpts)
 	if err != nil {
 		return fmt.Errorf("Could not instantiate gNMI server: %v", err)
 	}
@@ -227,4 +272,38 @@ func (g *Gateway) StartGNMIServer(c *cache.Cache) error {
 	ctx := context.Background()
 	<-ctx.Done()
 	return ctx.Err()
+}
+
+func (g *Gateway) ConnectToZookeeper() (*zk.Conn, error) {
+	g.config.Log.Info().Msgf("Connecting to Zookeeper hosts: %v.", strings.Join(g.config.ZookeeperHosts, ", "))
+	newConn, eventChan, err := zk.Connect(g.config.ZookeeperHosts, g.config.ZookeeperTimeout)
+	if err != nil {
+		g.config.Log.Error().Err(err).Msgf("Unable to connect to Zookeeper: %v", err)
+		return nil, err
+	}
+	go g.zookeeperEventHandler(eventChan)
+	g.config.Log.Info().Msg("Zookeeper connected.")
+	return newConn, nil
+}
+
+func (g *Gateway) zookeeperEventHandler(zkEventChan <-chan zk.Event) {
+	for {
+		select {
+		case event := <-zkEventChan:
+			if event.State != zk.StateUnknown {
+				switch event.State {
+				case zk.StateConnected:
+					g.config.Log.Info().Msg("Connected to Zookeeper.")
+				case zk.StateConnecting:
+					g.config.Log.Info().Msg("Attempting to connect to Zookeeper.")
+				case zk.StateDisconnected:
+					g.config.Log.Info().Msg("Zookeeper disconnected.")
+				case zk.StateHasSession:
+					g.config.Log.Info().Msg("Zookeeper session established.")
+				default:
+					g.config.Log.Info().Msgf("Got Zookeeper state update: %v", event.State.String())
+				}
+			}
+		}
+	}
 }

@@ -57,7 +57,8 @@ type GatewayConfig struct {
 	TargetLimit int
 	// Updates to be dropped prior to being inserted into the cache
 	UpdateRejections [][]*gnmipb.PathElem
-	// All of the hosts in your Zookeeper cluster (or single Zookeeper instance)
+	// All of the hosts in your Zookeeper cluster. Setting ZookeeperHosts will enable clustering. -EnableServer is a
+	// pre-requisite for clustering to be enabled.
 	ZookeeperHosts []string
 	// Prefix for the lock path in Zookeeper (e.g. /gnmi/gateway)
 	ZookeeperPrefix string

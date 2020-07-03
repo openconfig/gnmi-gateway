@@ -13,18 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package connections
+package clustering
 
-import (
-	"github.com/stretchr/testify/assert"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
-	"testing"
-)
-
-func TestNewConnectionManagerDefault(t *testing.T) {
-	assertion := assert.New(t)
-
-	mgr, err := NewConnectionManagerDefault(&configuration.GatewayConfig{}, nil)
-	assertion.NoError(err)
-	assertion.NotNil(mgr)
+type Cluster interface {
+	Register(string) error
+	MemberList() ([]string, error)
+	MemberChangeCallback(func(add string, remove string))
 }
