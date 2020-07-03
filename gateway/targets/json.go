@@ -22,6 +22,7 @@ import (
 	"github.com/openconfig/gnmi/target"
 	"os"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 	"time"
 )
 
@@ -29,6 +30,7 @@ type JSONFileTargetLoader struct {
 	config   *configuration.GatewayConfig
 	file     string
 	interval time.Duration
+	last     *targetpb.Configuration
 }
 
 func NewJSONFileTargetLoader(config *configuration.GatewayConfig) TargetLoader {
@@ -63,13 +65,22 @@ func (m *JSONFileTargetLoader) Start() error {
 	return nil // nothing to start
 }
 
-func (m *JSONFileTargetLoader) WatchConfiguration(targetChan chan *targetpb.Configuration) {
+func (m *JSONFileTargetLoader) WatchConfiguration(targetChan chan<- *connections.TargetConnectionControl) {
 	for {
 		targetConfig, err := m.GetConfiguration()
 		if err != nil {
 			m.config.Log.Error().Err(err).Msgf("Unable to get target configuration.")
 		} else {
-			targetChan <- targetConfig
+			controlMsg := new(connections.TargetConnectionControl)
+			for targetName := range m.last.Target {
+				_, exists := targetConfig.Target[targetName]
+				if !exists {
+					controlMsg.Remove = append(controlMsg.Remove, targetName)
+				}
+			}
+			controlMsg.Insert = targetConfig
+
+			targetChan <- controlMsg
 		}
 		time.Sleep(m.interval)
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/openconfig/gnmi/proto/target"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/clustering"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 )
 
 // ClusterTargetLoader is used internally to connect/disconnect from other cluster members if clustering is enabled.
@@ -39,9 +40,9 @@ func (c ClusterTargetLoader) GetConfiguration() (*target.Configuration, error) {
 }
 
 func (c ClusterTargetLoader) Start() error {
-	panic("implement me")
+	return nil // nothing to start
 }
 
-func (c ClusterTargetLoader) WatchConfiguration(chan *target.Configuration) {
+func (c ClusterTargetLoader) WatchConfiguration(chan<- *connections.TargetConnectionControl) {
 	panic("implement me")
 }

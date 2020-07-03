@@ -15,7 +15,10 @@
 
 package targets
 
-import targetpb "github.com/openconfig/gnmi/proto/target"
+import (
+	targetpb "github.com/openconfig/gnmi/proto/target"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
+)
 
 type TargetLoader interface {
 	// Get the Configuration once.
@@ -24,5 +27,5 @@ type TargetLoader interface {
 	Start() error
 	// Start watching the configuration for changes and send the entire Configuration to the supplied channel when
 	// a change is detected.
-	WatchConfiguration(chan *targetpb.Configuration)
+	WatchConfiguration(chan<- *connections.TargetConnectionControl)
 }

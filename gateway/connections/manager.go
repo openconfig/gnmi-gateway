@@ -34,12 +34,21 @@ func NewConnectionManagerDefault(config *configuration.GatewayConfig, zkConn *zk
 		config:            config,
 		connLimit:         semaphore.NewWeighted(int64(config.TargetLimit)),
 		targets:           make(map[string]*TargetState),
-		targetsConfigChan: make(chan *targetpb.Configuration, 1),
+		targetsConfigChan: make(chan *TargetConnectionControl, 10),
 		zkConn:            zkConn,
 	}
 	cache.Type = cache.GnmiNoti
 	mgr.cache = cache.New(nil)
 	return &mgr, nil
+}
+
+type TargetConnectionControl struct {
+	// Insert will insert and connect all of the named target configs. If a config with the same name
+	// already exists it will be overwritten and the target reconnected if the new config is different
+	// from the old one.
+	Insert *targetpb.Configuration
+	// Remove will remove and disconnect from all of the named targets.
+	Remove []string
 }
 
 type ConnectionManager struct {
@@ -48,7 +57,7 @@ type ConnectionManager struct {
 	connLimit         *semaphore.Weighted
 	targets           map[string]*TargetState
 	targetsMutex      sync.Mutex
-	targetsConfigChan chan *targetpb.Configuration
+	targetsConfigChan chan *TargetConnectionControl
 	zkConn            *zk.Conn
 }
 
@@ -66,7 +75,7 @@ func (c *ConnectionManager) HasLocalTargetLock(target string) bool {
 	return true
 }
 
-func (c *ConnectionManager) TargetConfigChan() chan *targetpb.Configuration {
+func (c *ConnectionManager) TargetConfigChan() chan<- *TargetConnectionControl {
 	return c.targetsConfigChan
 }
 
@@ -74,43 +83,49 @@ func (c *ConnectionManager) TargetConfigChan() chan *targetpb.Configuration {
 func (c *ConnectionManager) ReloadTargets() {
 	for {
 		select {
-		case targetConfig := <-c.targetsConfigChan:
-			log.Info().Msg("Connection manager received a Target Configuration")
-			if err := targetlib.Validate(targetConfig); err != nil {
+		case targetControlMsg := <-c.targetsConfigChan:
+			log.Info().Msgf("Connection manager received a target control message: %v inserts %v removes", len(targetControlMsg.Insert.Target), len(targetControlMsg.Remove))
+
+			if err := targetlib.Validate(targetControlMsg.Insert); err != nil {
 				c.config.Log.Error().Err(err).Msgf("configuration is invalid: %v", err)
 			}
 
 			c.targetsMutex.Lock()
 			newTargets := make(map[string]*TargetState)
-			// disconnect from everything we don't have a target config for
-			for name, target := range c.targets {
-				if _, exists := targetConfig.Target[name]; !exists {
-					err := target.disconnect()
+			for name, currentConfig := range c.targets {
+				// Disconnect from everything we want to remove
+				if stringInSlice(name, targetControlMsg.Remove) {
+					err := currentConfig.disconnect()
 					if err != nil {
 						c.config.Log.Warn().Err(err).Msgf("error while disconnecting from target %s: %v", name, err)
 					}
 				}
-			}
 
-			// make new connection or reconnect as needed
-			for name, target := range targetConfig.Target {
-				if currentTargetState, exists := c.targets[name]; exists {
-					// previous target exists
-
-					if !currentTargetState.Equal(target) {
-						// target is different
+				// Keep un-removed targets, check for changes in the insert list
+				newConfig, exists := targetControlMsg.Insert.Target[name]
+				if !exists {
+					// no config for this target
+					newTargets[name] = currentConfig
+				} else {
+					if !currentConfig.Equal(newConfig) {
+						// target is different; update the current config with the old one and reconnect
 						c.config.Log.Info().Msgf("Updating connection for %s.", name)
-						currentTargetState.target = target
-						currentTargetState.request = targetConfig.Request[target.Request]
 
-						if currentTargetState.connecting || currentTargetState.connected {
-							err := newTargets[name].reconnect()
-							if err != nil {
-								c.config.Log.Error().Err(err).Msgf("Error reconnecting connection for %s", name)
-							}
+						currentConfig.target = newConfig
+						currentConfig.request = targetControlMsg.Insert.Request[newConfig.Request]
+						err := currentConfig.reconnect()
+						if err != nil {
+							c.config.Log.Error().Err(err).Msgf("Error reconnecting connection for %s", name)
 						}
 					}
-					newTargets[name] = currentTargetState
+					newTargets[name] = currentConfig
+				}
+			}
+
+			// make new connections
+			for name, newConfig := range targetControlMsg.Insert.Target {
+				if _, exists := newTargets[name]; exists {
+					continue
 				} else if strings.HasPrefix(name, "*:") {
 					c.config.Log.Info().Msgf("Initializing wildcard target %s.", name)
 					newTargets[name] = &TargetState{
@@ -118,8 +133,8 @@ func (c *ConnectionManager) ReloadTargets() {
 						connManager: c,
 						name:        name,
 						queryTarget: "*",
-						target:      target,
-						request:     targetConfig.Request[target.Request],
+						target:      newConfig,
+						request:     targetControlMsg.Insert.Request[newConfig.Request],
 					}
 					go newTargets[name].connect(c.connLimit)
 				} else {
@@ -134,8 +149,8 @@ func (c *ConnectionManager) ReloadTargets() {
 						name:        name,
 						queryTarget: name,
 						targetCache: c.cache.Add(name),
-						target:      target,
-						request:     targetConfig.Request[target.Request],
+						target:      newConfig,
+						request:     targetControlMsg.Insert.Request[newConfig.Request],
 					}
 					if c.zkConn != nil {
 						go newTargets[name].connectWithLock(c.connLimit)
@@ -159,4 +174,13 @@ func (c *ConnectionManager) Start() error {
 
 func MakeTargetLockPath(prefix string, target string) string {
 	return strings.TrimRight(prefix, "/") + "/target/" + target
+}
+
+func stringInSlice(s string, list []string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
