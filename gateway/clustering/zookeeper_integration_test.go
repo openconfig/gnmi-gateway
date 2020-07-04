@@ -70,33 +70,55 @@ func TestZookeeperCluster_Register(t *testing.T) {
 	conn, err := connectToZK()
 	assertion.NoError(err)
 
-	cluster := clustering.NewZookeeperCluster(config, conn)
-	assertion.NoError(cluster.Register(ZookeeperIntegrationTestMemberOne))
+	cluster := clustering.NewZookeeperCluster(config, conn, ZookeeperIntegrationTestMemberOne)
+	assertion.NoError(cluster.Register())
 
 	members, err := cluster.MemberList()
 	assertion.NoError(err)
-	assertion.Len(members, 1)
-	assertion.Equal([]string{ZookeeperIntegrationTestMemberOne}, members)
+	assertion.Len(members, 0)
 
 	conn.Close()
 }
 
-func TestZookeeperCluster_RegisterMultiple(t *testing.T) {
+// TODO (cmcintosh): enable this test
+//func TestZookeeperCluster_EmptyMemberList(t *testing.T) {
+//	assertion := assert.New(t)
+//
+//	config := minimalGatewayConfig()
+//	conn, err := connectToZK()
+//	assertion.NoError(err)
+//
+//	searchPath := clustering.CleanPath(config.ZookeeperPrefix) + clustering.CleanPath(clustering.ClusterMemberPath)
+//
+//	err = conn.Delete(searchPath, 0)
+//	if err != nil && err != zk.ErrNoNode {
+//		assertion.NoError(fmt.Errorf("unable to delete test node: %v", err))
+//	}
+//
+//	cluster := clustering.NewZookeeperCluster(config, conn, ZookeeperIntegrationTestMemberOne)
+//	members, err := cluster.MemberList()
+//	assertion.NoError(err)
+//	assertion.Len(members, 0)
+//
+//	conn.Close()
+//}
+
+func TestZookeeperCluster_EmptyMemberListCallback(t *testing.T) {
 	assertion := assert.New(t)
 
 	config := minimalGatewayConfig()
 	conn, err := connectToZK()
 	assertion.NoError(err)
 
-	cluster := clustering.NewZookeeperCluster(config, conn)
-	assertion.NoError(cluster.Register(ZookeeperIntegrationTestMemberOne))
-	assertion.NoError(cluster.Register(ZookeeperIntegrationTestMemberTwo))
+	searchPath := clustering.CleanPath(config.ZookeeperPrefix) + clustering.CleanPath(clustering.ClusterMemberPath)
 
-	members, err := cluster.MemberList()
-	assertion.NoError(err)
-	assertion.Len(members, 2)
-	assertion.Contains(members, ZookeeperIntegrationTestMemberOne)
-	assertion.Contains(members, ZookeeperIntegrationTestMemberTwo)
+	err = conn.Delete(searchPath, 0)
+	if err != nil && err != zk.ErrNoNode {
+		assertion.NoError(fmt.Errorf("unable to delete test node: %v", err))
+	}
+
+	cluster := clustering.NewZookeeperCluster(config, conn, ZookeeperIntegrationTestMemberOne)
+	assertion.NoError(cluster.MemberChangeCallback(func(add string, remove string) {}))
 
 	conn.Close()
 }
@@ -108,14 +130,13 @@ func TestZookeeperCluster_RegisterDuplicate(t *testing.T) {
 	conn, err := connectToZK()
 	assertion.NoError(err)
 
-	cluster := clustering.NewZookeeperCluster(config, conn)
-	assertion.NoError(cluster.Register(ZookeeperIntegrationTestMemberOne))
-	assertion.Error(cluster.Register(ZookeeperIntegrationTestMemberOne))
+	cluster := clustering.NewZookeeperCluster(config, conn, ZookeeperIntegrationTestMemberOne)
+	assertion.NoError(cluster.Register())
+	assertion.Error(cluster.Register())
 
 	members, err := cluster.MemberList()
 	assertion.NoError(err)
-	assertion.Len(members, 1)
-	assertion.Equal([]string{ZookeeperIntegrationTestMemberOne}, members)
+	assertion.Len(members, 0)
 
 	conn.Close()
 }
@@ -130,12 +151,12 @@ func TestZookeeperCluster_MemberChangeCallback(t *testing.T) {
 	connTwo, err := connectToZK()
 	assertion.NoError(err)
 
-	clusterOne := clustering.NewZookeeperCluster(config, connOne)
-	clusterTwo := clustering.NewZookeeperCluster(config, connTwo)
+	clusterOne := clustering.NewZookeeperCluster(config, connOne, ZookeeperIntegrationTestMemberOne)
+	clusterTwo := clustering.NewZookeeperCluster(config, connTwo, ZookeeperIntegrationTestMemberTwo)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
-	assertion.NoError(clusterOne.Register(ZookeeperIntegrationTestMemberOne))
+	assertion.NoError(clusterOne.Register())
 
 	var gotMemberOneAdd = false
 	var gotMemberTwoAdd = false
@@ -156,15 +177,15 @@ func TestZookeeperCluster_MemberChangeCallback(t *testing.T) {
 		wg.Done()
 	}))
 
-	wg.Add(1)
-	assertion.NoError(clusterTwo.Register(ZookeeperIntegrationTestMemberTwo))
+	// this shouldn't trigger the callback for itself
+	assertion.NoError(clusterTwo.Register())
 
 	wg.Add(1)
 	connOne.Close() // should remove the nodes for member one
 
 	wg.Wait()
 	assertion.True(gotMemberOneAdd)
-	assertion.True(gotMemberTwoAdd)
+	assertion.False(gotMemberTwoAdd)
 	assertion.True(gotMemberOneRemove)
 
 	connTwo.Close()

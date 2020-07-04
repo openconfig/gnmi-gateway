@@ -48,7 +48,9 @@ func (c ClusterTargetLoader) GetConfiguration() (*target.Configuration, error) {
 			"all": {
 				Request: &gnmi.SubscribeRequest_Subscribe{
 					Subscribe: &gnmi.SubscriptionList{
-						Prefix: &gnmi.Path{},
+						Prefix: &gnmi.Path{
+							Target: "*",
+						},
 						Subscription: []*gnmi.Subscription{
 							{
 								Path: &gnmi.Path{
@@ -87,7 +89,9 @@ func (c ClusterTargetLoader) WatchConfiguration(configChan chan<- *connections.T
 						"all": {
 							Request: &gnmi.SubscribeRequest_Subscribe{
 								Subscribe: &gnmi.SubscriptionList{
-									Prefix: &gnmi.Path{},
+									Prefix: &gnmi.Path{
+										Target: "*",
+									},
 									Subscription: []*gnmi.Subscription{
 										{
 											Path: &gnmi.Path{

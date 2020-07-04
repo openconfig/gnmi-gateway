@@ -16,7 +16,8 @@
 package clustering
 
 type Cluster interface {
-	Register(string) error
+	Register() error
+	Member() string
 	MemberList() ([]string, error)
 	MemberChangeCallback(callback MemberChangeCallback) error
 }

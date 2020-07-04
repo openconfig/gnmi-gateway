@@ -70,6 +70,7 @@ import (
 	"net"
 	_ "net/http/pprof"
 	"os"
+	"sort"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/clustering"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
@@ -136,17 +137,31 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	finished := make(chan error, 1)
 
 	var err error
+	var clusterMember string
 	if g.config.ZookeeperHosts != nil && len(g.config.ZookeeperHosts) > 0 {
 		if !g.config.EnableServer {
 			return errors.New("gNMI server is required for clustering: Set -EnableServer or disable clustering by removing -ZookeeperHosts")
 		}
+
+		if g.config.ServerAddress == "" {
+			g.config.ServerAddress, err = getLocalIP()
+			if err != nil {
+				return fmt.Errorf("clustering requires ServerAddress to be set: %v", err)
+			}
+		}
+
+		if g.config.ServerPort == 0 {
+			g.config.ServerPort = g.config.ServerListenPort
+		}
+
+		clusterMember = g.config.ServerAddress + ":" + strconv.Itoa(g.config.ServerPort)
 
 		g.zkConn, err = g.ConnectToZookeeper()
 		if err != nil {
 			g.config.Log.Error().Msgf("Unable to connect to Zookeeper: %v", err)
 			return err
 		}
-		g.cluster = clustering.NewZookeeperCluster(g.config, g.zkConn)
+		g.cluster = clustering.NewZookeeperCluster(g.config, g.zkConn, clusterMember)
 		g.config.Log.Info().Msg("Clustering is enabled.")
 	} else {
 		g.config.Log.Info().Msg("Clustering is NOT enabled. No locking or cluster coordination will happen.")
@@ -154,21 +169,29 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 	connMgr, err := connections.NewConnectionManagerDefault(g.config, g.zkConn)
 	if err != nil {
-		g.config.Log.Error().Err(err).Msg("Unable to create connection manager.")
+		g.config.Log.Error().Msgf("Unable to create connection manager: %v", err)
 		os.Exit(1)
 	}
 	g.config.Log.Info().Msg("Starting connection manager.")
 	if err := connMgr.Start(); err != nil {
-		g.config.Log.Error().Err(err).Msgf("Unable to start connection manager: %v", err)
+		g.config.Log.Error().Msgf("Unable to start connection manager: %v", err)
 		return err
 	}
 	connMgr.Cache().SetClient(g.sendUpdateToClients)
 
 	if g.config.EnableServer {
+		if g.config.ServerListenAddress == "" {
+			return fmt.Errorf("ServerListenAddress can't be empty with -EnableServer")
+		}
+
+		if g.config.ServerListenPort == 0 {
+			return fmt.Errorf("ServerListenPort can't be empty with -EnableServer")
+		}
+
 		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerListenPort)
 		go func() {
 			if err := g.StartGNMIServer(connMgr); err != nil {
-				g.config.Log.Error().Err(err).Msg("Unable to start gNMI server.")
+				g.config.Log.Error().Msgf("Unable to start gNMI server: %v", err)
 				finished <- err
 			}
 		}()
@@ -178,8 +201,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		go func() {
 			// TODO: check the gNMI server goroutine is serving before registering. Other cluster members may try to
 			//       connect before the gNMI server is up if we register too early.
-			clusterMember := g.config.ServerAddress + ":" + strconv.Itoa(g.config.ServerPort)
-			err := g.cluster.Register(clusterMember)
+			err := g.cluster.Register()
 			if err != nil {
 				finished <- fmt.Errorf("unable to register this cluster member '%s': %v", clusterMember, err)
 			} else {
@@ -197,7 +219,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		go func(loader targets.TargetLoader) {
 			err := loader.Start()
 			if err != nil {
-				g.config.Log.Error().Err(err).Msgf("Unable to start target loader %T", loader)
+				g.config.Log.Error().Msgf("Unable to start target loader %T: %v", loader, err)
 				finished <- err
 			}
 			err = loader.WatchConfiguration(connMgr.TargetConfigChan())
@@ -211,7 +233,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		go func(exporter exporters.Exporter) {
 			err := exporter.Start(connMgr.Cache())
 			if err != nil {
-				g.config.Log.Error().Err(err).Msgf("Unable to start exporter %T", exporter)
+				g.config.Log.Error().Msgf("Unable to start exporter %T: %v", exporter, err)
 				finished <- err
 			}
 			g.AddClient(exporter.Export)
@@ -235,7 +257,7 @@ func (g *Gateway) SendNotificationToClients(n *gnmi.Notification) {
 func (g *Gateway) StartGNMIServer(connMgr *connections.ConnectionManager) error {
 	if g.config.ServerTLSCreds == nil {
 		if g.config.ServerTLSCert == "" || g.config.ServerTLSKey == "" {
-			return fmt.Errorf("no TLS creds; you must specify a TLS cert and key")
+			return fmt.Errorf("no TLS creds: you must specify a ServerTLSCert and ServerTLSKey")
 		}
 
 		// Initialize TLS credentials.
@@ -269,7 +291,7 @@ func (g *Gateway) StartGNMIServer(connMgr *connections.ConnectionManager) error 
 	}
 	go func() {
 		err := srv.Serve(lis) // blocks
-		g.config.Log.Error().Err(err).Msg("Error running gNMI server.")
+		g.config.Log.Error().Msgf("Error running gNMI server: %v", err)
 	}()
 	defer srv.Stop()
 	ctx := context.Background()
@@ -281,7 +303,7 @@ func (g *Gateway) ConnectToZookeeper() (*zk.Conn, error) {
 	g.config.Log.Info().Msgf("Connecting to Zookeeper hosts: %v.", strings.Join(g.config.ZookeeperHosts, ", "))
 	newConn, eventChan, err := zk.Connect(g.config.ZookeeperHosts, g.config.ZookeeperTimeout)
 	if err != nil {
-		g.config.Log.Error().Err(err).Msgf("Unable to connect to Zookeeper: %v", err)
+		g.config.Log.Error().Msgf("Unable to connect to Zookeeper: %v", err)
 		return nil, err
 	}
 	go g.zookeeperEventHandler(eventChan)
@@ -309,4 +331,35 @@ func (g *Gateway) zookeeperEventHandler(zkEventChan <-chan zk.Event) {
 			}
 		}
 	}
+}
+
+// Get the first non-loopback IP address from the local system.
+func getLocalIP() (string, error) {
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", fmt.Errorf("unable to get local interface addresses: %v", err)
+	}
+
+	var validIP []string
+	for _, ip := range addresses {
+		ipNet, ok := ip.(*net.IPNet)
+		if !ok {
+			continue
+		}
+
+		if ipNet.IP.IsLoopback() {
+			continue
+		}
+
+		if ipNet.IP.To4() != nil || ipNet.IP.To16() != nil {
+			validIP = append(validIP, ipNet.IP.String())
+		}
+	}
+
+	if validIP == nil || len(validIP) < 1 {
+		return "", fmt.Errorf("no valid local IPs found")
+	}
+
+	sort.Strings(validIP)
+	return validIP[0], nil
 }

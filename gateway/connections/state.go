@@ -113,8 +113,11 @@ func (t *TargetState) doConnect() {
 		}
 	}
 
+	// TODO (cmcintosh): make PR for targetpb to include TLS config and remove this
+	_, NoTLS := t.target.Meta["NoTLS"]
+
 	// TLS is always enabled for localTargets but we won't verify certs if no client TLS config exists.
-	if t.config.ClientTLSConfig != nil {
+	if t.config.ClientTLSConfig != nil && !NoTLS {
 		query.TLS = t.config.ClientTLSConfig
 	} else {
 		query.TLS = &tls.Config{

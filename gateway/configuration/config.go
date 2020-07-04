@@ -39,6 +39,8 @@ type GatewayConfig struct {
 	// ServerPort is the TCP port where other cluster members can reach the gNMI server. ServerListenPort is used if the
 	// parameter is not provided.
 	ServerPort int
+	// ServerListenAddress is the interface IP address the gNMI server will listen on.
+	ServerListenAddress string
 	// ServerListenPort is the TCP port the gNMI server will listen on.
 	ServerListenPort int
 	// gNMI Server TLS credentials. You must specify either this or both ServerTLSCert & ServerTLSKey if you -EnableServer

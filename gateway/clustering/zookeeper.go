@@ -31,20 +31,26 @@ type ZookeeperCluster struct {
 	config         *configuration.GatewayConfig
 	conn           *zk.Conn
 	callbackCancel func()
+	member         string
 }
 
-func NewZookeeperCluster(config *configuration.GatewayConfig, conn *zk.Conn) *ZookeeperCluster {
+func NewZookeeperCluster(config *configuration.GatewayConfig, conn *zk.Conn, member string) *ZookeeperCluster {
 	return &ZookeeperCluster{
 		acl:    zk.WorldACL(DefaultACLPerms),
 		config: config,
 		conn:   conn,
+		member: member,
 	}
+}
+
+func (z *ZookeeperCluster) Member() string {
+	return z.member
 }
 
 // Register will create an ephemeral Zookeeper node in a cluster member tree. The node
 // will be removed automatically by Zookeeper if the session disconnects.
-func (z *ZookeeperCluster) Register(member string) error {
-	registrationPath := cleanPath(z.config.ZookeeperPrefix) + cleanPath(ClusterMemberPath) + cleanPath(member)
+func (z *ZookeeperCluster) Register() error {
+	registrationPath := CleanPath(z.config.ZookeeperPrefix) + CleanPath(ClusterMemberPath) + CleanPath(z.member)
 
 	_, err := z.conn.Create(registrationPath, []byte{}, zk.FlagEphemeral, z.acl)
 
@@ -72,7 +78,7 @@ type MemberChangeCallback func(add string, remove string)
 // again for each future addition and removal. Subsequent calls to MemberChangeCallback will cancel previous
 // callbacks.
 func (z *ZookeeperCluster) MemberChangeCallback(callback MemberChangeCallback) error {
-	searchPath := cleanPath(z.config.ZookeeperPrefix) + cleanPath(ClusterMemberPath)
+	searchPath := CleanPath(z.config.ZookeeperPrefix) + CleanPath(ClusterMemberPath)
 
 	if z.callbackCancel != nil {
 		z.callbackCancel()
@@ -80,10 +86,20 @@ func (z *ZookeeperCluster) MemberChangeCallback(callback MemberChangeCallback) e
 
 	var stopped bool
 	go func() {
+		// TODO (cmcintosh): This whole goroutine has awful error handling and needs to be rewritten.
 		var previousMembers []string
 		var consecutiveErrors = 0
 		for !stopped {
 			currentMembers, _, memberListChanges, err := z.conn.ChildrenW(searchPath)
+
+			//if err == zk.ErrNoNode {
+			//	createErr := CreatePath(z.conn, searchPath, z.acl)
+			//	if createErr != nil {
+			//		err
+			//		z.config.Log.Error().Msgf()
+			//	} else
+			//}
+
 			if err != nil {
 				consecutiveErrors++
 				z.config.Log.Error().Msgf("error #%d while trying to set Zookeeper watch on cluster member tree: %v", consecutiveErrors, err)
@@ -93,14 +109,25 @@ func (z *ZookeeperCluster) MemberChangeCallback(callback MemberChangeCallback) e
 				// Sleep to avoid retrying too quickly
 				// 2*ZookeeperTimeout should be plenty of time if the underlying connection is the issue
 				time.Sleep(2 * z.config.ZookeeperTimeout)
+				continue
 			}
 
+			consecutiveErrors = 0
+
 			for _, currentMember := range currentMembers {
+				if currentMember == z.member {
+					continue
+				}
+
 				if !stringInSlice(currentMember, previousMembers) {
 					callback(currentMember, "") // add
 				}
 			}
 			for _, previousMember := range previousMembers {
+				if previousMember == z.member {
+					continue
+				}
+
 				if !stringInSlice(previousMember, currentMembers) {
 					callback("", previousMember) // remove
 				}
@@ -120,14 +147,14 @@ func (z *ZookeeperCluster) MemberChangeCallback(callback MemberChangeCallback) e
 func (z *ZookeeperCluster) MemberList() ([]string, error) {
 	var clusterMembers []string
 
-	searchPath := cleanPath(z.config.ZookeeperPrefix) + cleanPath(ClusterMemberPath)
+	searchPath := CleanPath(z.config.ZookeeperPrefix) + CleanPath(ClusterMemberPath)
 	children, _, err := z.conn.Children(searchPath)
 	if err != nil {
-		return nil, fmt.Errorf("error while trying to set Zookeeper watch on cluster member tree")
+		return nil, fmt.Errorf("error while trying to set Zookeeper watch on cluster member tree: %v", err)
 	}
 
 	for _, member := range children {
-		if member != "" {
+		if member != "" && member != z.member {
 			clusterMembers = append(clusterMembers, member)
 		}
 	}
@@ -136,8 +163,17 @@ func (z *ZookeeperCluster) MemberList() ([]string, error) {
 
 func CreateParentPath(conn *zk.Conn, path string, acl []zk.ACL) error {
 	parts := strings.Split(path, "/")
+	return createPath(conn, parts[:len(parts)-1], acl)
+}
+
+//func CreatePath(conn *zk.Conn, path string, acl []zk.ACL) error {
+//	parts := strings.Split(path, "/")
+//	return createPath(conn, parts, acl)
+//}
+
+func createPath(conn *zk.Conn, parts []string, acl []zk.ACL) error {
 	pth := ""
-	for _, p := range parts[:len(parts)-1] {
+	for _, p := range parts {
 		if p == "" {
 			continue
 		}
@@ -159,7 +195,7 @@ func CreateParentPath(conn *zk.Conn, path string, acl []zk.ACL) error {
 	return nil
 }
 
-func cleanPath(path string) string {
+func CleanPath(path string) string {
 	return "/" + strings.Trim(path, "/")
 }
 
