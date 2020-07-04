@@ -79,6 +79,7 @@ func (m *JSONFileTargetLoader) WatchConfiguration(targetChan chan<- *connections
 				}
 			}
 			controlMsg.Insert = targetConfig
+			m.last = targetConfig
 
 			targetChan <- controlMsg
 		}
