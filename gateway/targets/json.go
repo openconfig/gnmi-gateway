@@ -65,7 +65,7 @@ func (m *JSONFileTargetLoader) Start() error {
 	return nil // nothing to start
 }
 
-func (m *JSONFileTargetLoader) WatchConfiguration(targetChan chan<- *connections.TargetConnectionControl) {
+func (m *JSONFileTargetLoader) WatchConfiguration(targetChan chan<- *connections.TargetConnectionControl) error {
 	for {
 		targetConfig, err := m.GetConfiguration()
 		if err != nil {

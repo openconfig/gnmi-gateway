@@ -27,5 +27,5 @@ type TargetLoader interface {
 	Start() error
 	// Start watching the configuration for changes and send the entire Configuration to the supplied channel when
 	// a change is detected.
-	WatchConfiguration(chan<- *connections.TargetConnectionControl)
+	WatchConfiguration(chan<- *connections.TargetConnectionControl) error
 }
