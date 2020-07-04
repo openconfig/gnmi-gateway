@@ -279,7 +279,7 @@ func (t *TargetState) updateTargetCache(cache *cache.Target, update *gnmipb.Noti
 		switch err.Error() {
 		case "suppressed duplicate value":
 		case "update is stale":
-			t.config.Log.Warn().Msgf("%s: %+v", err, update)
+			t.config.Log.Warn().Msgf("%s: from target '%s': %+v", err, t.name, update)
 		default:
 			return fmt.Errorf("targetCache cache update error: %v: %+v", err, update)
 		}

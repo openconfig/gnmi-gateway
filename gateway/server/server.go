@@ -43,9 +43,9 @@ import (
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/clustering"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
+	"strings"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/client"
@@ -158,7 +158,7 @@ func (s *Server) Update(n *ctree.Leaf) {
 		// just go with the path in the prefix
 		s.m.Update(n, p)
 	default:
-		log.Errorf("update is not a known type; type is %T", v)
+		s.config.Log.Error().Msgf("update is not a known type; type is %T", v)
 	}
 }
 
@@ -189,7 +189,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 	if s.a != nil {
 		a, err := s.a.NewRPCACL(stream.Context())
 		if err != nil {
-			log.Errorf("NewRPCACL fails due to %v", err)
+			s.config.Log.Error().Msgf("NewRPCACL fails due to %v", err)
 			return status.Error(codes.Unauthenticated, "no authentication/authorization for requested operation")
 		}
 		c.acl = a
@@ -224,13 +224,13 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 		return fmt.Errorf("unable to retrieve current cluster member list: %v", err)
 	}
 
-	if stringInSlice(ctxPeer.Addr.String(), memberList) {
+	if memberAddressInMemberList(ctxPeer.Addr.String(), memberList) {
 		clusterMember = true
-		log.Infof("subscribe: cluster member peer: %v target: %q subscription: %s", ctxPeer.Addr, c.target, c.sr)
-		defer log.Infof("subscribe: cluster member peer: %v target %q subscription: end: %q", ctxPeer.Addr, c.target, c.sr)
+		s.config.Log.Info().Msgf("subscribe: cluster member peer: %v target: %q subscription: %s", ctxPeer.Addr, c.target, c.sr)
+		defer s.config.Log.Info().Msgf("subscribe: cluster member peer: %v target %q subscription: end: %q", ctxPeer.Addr, c.target, c.sr)
 	} else {
-		log.Infof("subscribe: client: %v target: %q subscription: %s", ctxPeer.Addr, c.target, c.sr)
-		defer log.Infof("subscribe: client: %v target %q subscription: end: %q", ctxPeer.Addr, c.target, c.sr)
+		s.config.Log.Info().Msgf("subscribe: client: %v target: %q subscription: %s", ctxPeer.Addr, c.target, c.sr)
+		defer s.config.Log.Info().Msgf("subscribe: client: %v target %q subscription: end: %q", ctxPeer.Addr, c.target, c.sr)
 	}
 
 	c.queue = coalesce.NewQueue()
@@ -349,15 +349,15 @@ type streamClient struct {
 // locally will be forwarded.
 func (s *Server) processSubscription(c *streamClient) {
 	var err error
-	log.V(2).Infof("start processSubscription for %p", c)
+	s.config.Log.Debug().Msgf("start processSubscription for %p", c)
 	// Close the cache client queue on error.
 	defer func() {
 		if err != nil {
-			log.Error(err)
+			s.config.Log.Error().Msgf("processSubscription error: %v", err)
 			c.queue.Close()
 			c.errC <- err
 		}
-		log.V(2).Infof("end processSubscription for %p", c)
+		s.config.Log.Debug().Msgf("end processSubscription for %p", c)
 	}()
 	if s.subscribeSlots != nil {
 		select {
@@ -365,9 +365,9 @@ func (s *Server) processSubscription(c *streamClient) {
 		// are already in flight.
 		case s.subscribeSlots <- struct{}{}:
 		default:
-			log.V(2).Infof("subscription %s delayed waiting for 1 of %d subscription slots.", c.sr, len(s.subscribeSlots))
+			s.config.Log.Debug().Msgf("subscription %s delayed waiting for 1 of %d subscription slots.", c.sr, len(s.subscribeSlots))
 			s.subscribeSlots <- struct{}{}
-			log.V(2).Infof("subscription %s resumed", c.sr)
+			s.config.Log.Debug().Msgf("subscription %s resumed", c.sr)
 		}
 		// Remove subscription from the channel upon completion.
 		defer func() {
@@ -404,7 +404,7 @@ func (s *Server) processSubscription(c *streamClient) {
 // processPollingSubscription handles the POLL mode Subscription RPC.
 func (s *Server) processPollingSubscription(c *streamClient) {
 	s.processSubscription(c)
-	log.Infof("polling subscription: first complete response: %q", c.sr)
+	s.config.Log.Info().Msgf("polling subscription: first complete response: %q", c.sr)
 	for {
 		if c.queue.IsClosed() {
 			return
@@ -416,13 +416,13 @@ func (s *Server) processPollingSubscription(c *streamClient) {
 			return
 		}
 		if err != nil {
-			log.Error(err)
+			s.config.Log.Error().Msgf("processPollingSubscription error: %v", err)
 			c.errC <- err
 			return
 		}
-		log.Infof("polling subscription: repoll: %q", c.sr)
+		s.config.Log.Info().Msgf("polling subscription: repoll: %q", c.sr)
 		s.processSubscription(c)
-		log.Infof("polling subscription: repoll complete: %q", c.sr)
+		s.config.Log.Info().Msgf("polling subscription: repoll complete: %q", c.sr)
 	}
 }
 
@@ -443,7 +443,7 @@ func (s *Server) sendStreamingResults(c *streamClient, connMgr *connections.Conn
 		case <-t.C:
 			err := errors.New("subscription timed out while sending")
 			c.errC <- err
-			log.Errorf("%v : %v", ctxPeer, err)
+			s.config.Log.Error().Msgf("%v : %v", ctxPeer, err)
 		case <-done:
 		}
 	}()
@@ -497,7 +497,7 @@ func (s *Server) sendStreamingResults(c *streamClient, connMgr *connections.Conn
 		}
 		// If the only target being subscribed was deleted, stop streaming.
 		if cache.IsTargetDelete(n) && c.target != "*" {
-			log.Infof("Target %q was deleted. Closing stream.", c.target)
+			s.config.Log.Info().Msgf("Target %q was deleted. Closing stream.", c.target)
 			c.errC <- nil
 			return
 		}
@@ -555,9 +555,20 @@ func MakeSubscribeResponse(n interface{}, dup uint32) (*pb.SubscribeResponse, er
 	return response, nil
 }
 
-func stringInSlice(s string, list []string) bool {
+// memberAddressInMemberList will return true of the IP portion of the supplied address is present in the member list.
+func memberAddressInMemberList(addr string, list []string) bool {
+	ipParts := strings.Split(addr, ":")
+	if len(ipParts) < 1 || ipParts[0] == "" {
+		return false
+	}
+
 	for _, v := range list {
-		if v == s {
+		memberParts := strings.Split(v, ":")
+		if len(memberParts) < 1 || memberParts[0] == "" {
+			continue
+		}
+
+		if ipParts[0] == memberParts[0] {
 			return true
 		}
 	}
