@@ -64,6 +64,7 @@ import (
 	"fmt"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/rs/zerolog"
 	"github.com/samuel/go-zookeeper/zk"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -299,9 +300,21 @@ func (g *Gateway) StartGNMIServer(connMgr *connections.ConnectionManager) error 
 	return ctx.Err()
 }
 
+type ZKLogger struct {
+	log zerolog.Logger
+}
+
+func (z *ZKLogger) Printf(a string, b ...interface{}) {
+	z.log.Info().Msgf("Zookeeper: %s", fmt.Sprintf(a, b))
+}
+
 func (g *Gateway) ConnectToZookeeper() (*zk.Conn, error) {
+	zkLogger := &ZKLogger{
+		log: g.config.Log,
+	}
+
 	g.config.Log.Info().Msgf("Connecting to Zookeeper hosts: %v.", strings.Join(g.config.ZookeeperHosts, ", "))
-	newConn, eventChan, err := zk.Connect(g.config.ZookeeperHosts, g.config.ZookeeperTimeout)
+	newConn, eventChan, err := zk.Connect(g.config.ZookeeperHosts, g.config.ZookeeperTimeout, zk.WithLogger(zkLogger))
 	if err != nil {
 		g.config.Log.Error().Msgf("Unable to connect to Zookeeper: %v", err)
 		return nil, err

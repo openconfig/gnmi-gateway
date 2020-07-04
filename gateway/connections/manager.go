@@ -51,6 +51,17 @@ type TargetConnectionControl struct {
 	Remove []string
 }
 
+func (t *TargetConnectionControl) InsertCount() int {
+	if t.Insert == nil || t.Insert.Target == nil {
+		return 0
+	}
+	return len(t.Insert.Target)
+}
+
+func (t *TargetConnectionControl) RemoveCount() int {
+	return len(t.Remove)
+}
+
 type ConnectionManager struct {
 	cache             *cache.Cache
 	config            *configuration.GatewayConfig
@@ -84,10 +95,12 @@ func (c *ConnectionManager) ReloadTargets() {
 	for {
 		select {
 		case targetControlMsg := <-c.targetsConfigChan:
-			log.Info().Msgf("Connection manager received a target control message: %v inserts %v removes", len(targetControlMsg.Insert.Target), len(targetControlMsg.Remove))
+			log.Info().Msgf("Connection manager received a target control message: %v inserts %v removes", targetControlMsg.InsertCount(), targetControlMsg.RemoveCount())
 
-			if err := targetlib.Validate(targetControlMsg.Insert); err != nil {
-				c.config.Log.Error().Err(err).Msgf("configuration is invalid: %v", err)
+			if targetControlMsg.Insert != nil {
+				if err := targetlib.Validate(targetControlMsg.Insert); err != nil {
+					c.config.Log.Error().Err(err).Msgf("configuration is invalid: %v", err)
+				}
 			}
 
 			c.targetsMutex.Lock()
@@ -97,65 +110,69 @@ func (c *ConnectionManager) ReloadTargets() {
 				if stringInSlice(name, targetControlMsg.Remove) {
 					err := currentConfig.disconnect()
 					if err != nil {
-						c.config.Log.Warn().Err(err).Msgf("error while disconnecting from target %s: %v", name, err)
+						c.config.Log.Warn().Msgf("error while disconnecting from target '%s': %v", name, err)
 					}
 				}
 
-				// Keep un-removed targets, check for changes in the insert list
-				newConfig, exists := targetControlMsg.Insert.Target[name]
-				if !exists {
-					// no config for this target
-					newTargets[name] = currentConfig
-				} else {
-					if !currentConfig.Equal(newConfig) {
-						// target is different; update the current config with the old one and reconnect
-						c.config.Log.Info().Msgf("Updating connection for %s.", name)
+				if targetControlMsg.Insert != nil {
+					// Keep un-removed targets, check for changes in the insert list
+					newConfig, exists := targetControlMsg.Insert.Target[name]
+					if !exists {
+						// no config for this target
+						newTargets[name] = currentConfig
+					} else {
+						if !currentConfig.Equal(newConfig) {
+							// target is different; update the current config with the old one and reconnect
+							c.config.Log.Info().Msgf("Updating connection for %s.", name)
 
-						currentConfig.target = newConfig
-						currentConfig.request = targetControlMsg.Insert.Request[newConfig.Request]
-						err := currentConfig.reconnect()
-						if err != nil {
-							c.config.Log.Error().Err(err).Msgf("Error reconnecting connection for %s", name)
+							currentConfig.target = newConfig
+							currentConfig.request = targetControlMsg.Insert.Request[newConfig.Request]
+							err := currentConfig.reconnect()
+							if err != nil {
+								c.config.Log.Error().Err(err).Msgf("Error reconnecting connection for %s", name)
+							}
 						}
+						newTargets[name] = currentConfig
 					}
-					newTargets[name] = currentConfig
 				}
 			}
 
-			// make new connections
-			for name, newConfig := range targetControlMsg.Insert.Target {
-				if _, exists := newTargets[name]; exists {
-					continue
-				} else if strings.HasPrefix(name, "*:") {
-					c.config.Log.Info().Msgf("Initializing wildcard target %s.", name)
-					newTargets[name] = &TargetState{
-						config:      c.config,
-						connManager: c,
-						name:        name,
-						queryTarget: "*",
-						target:      newConfig,
-						request:     targetControlMsg.Insert.Request[newConfig.Request],
-					}
-					go newTargets[name].connect(c.connLimit)
-				} else {
-					lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, name)
-					clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
-					// no previous targetCache existed
-					c.config.Log.Info().Msgf("Initializing target %s.", name)
-					newTargets[name] = &TargetState{
-						config:      c.config,
-						connManager: c,
-						lock:        locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll)),
-						name:        name,
-						queryTarget: name,
-						targetCache: c.cache.Add(name),
-						target:      newConfig,
-						request:     targetControlMsg.Insert.Request[newConfig.Request],
-					}
-					if c.zkConn != nil {
-						go newTargets[name].connectWithLock(c.connLimit)
-					} else {
+			if targetControlMsg.Insert != nil {
+				// make new connections
+				for name, newConfig := range targetControlMsg.Insert.Target {
+					if _, exists := newTargets[name]; exists {
+						continue
+					} else if strings.HasPrefix(name, "*:") {
+						c.config.Log.Info().Msgf("Initializing wildcard target %s.", name)
+						newTargets[name] = &TargetState{
+							config:      c.config,
+							connManager: c,
+							name:        name,
+							queryTarget: "*",
+							target:      newConfig,
+							request:     targetControlMsg.Insert.Request[newConfig.Request],
+						}
 						go newTargets[name].connect(c.connLimit)
+					} else {
+						lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, name)
+						clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
+						// no previous targetCache existed
+						c.config.Log.Info().Msgf("Initializing target %s.", name)
+						newTargets[name] = &TargetState{
+							config:      c.config,
+							connManager: c,
+							lock:        locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll)),
+							name:        name,
+							queryTarget: name,
+							targetCache: c.cache.Add(name),
+							target:      newConfig,
+							request:     targetControlMsg.Insert.Request[newConfig.Request],
+						}
+						if c.zkConn != nil {
+							go newTargets[name].connectWithLock(c.connLimit)
+						} else {
+							go newTargets[name].connect(c.connLimit)
+						}
 					}
 				}
 			}

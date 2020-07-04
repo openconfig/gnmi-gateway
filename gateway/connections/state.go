@@ -137,7 +137,7 @@ func (t *TargetState) doConnect() {
 	t.client = client.Reconnect(&client.BaseClient{}, t.disconnected, nil)
 	// Subscribe blocks until .Close() is called
 	if err := t.client.Subscribe(context.Background(), query, gnmiclient.Type); err != nil {
-		t.config.Log.Error().Err(err).Msgf("Subscribe failed for targetCache %q: %v", t.name, err)
+		t.config.Log.Error().Msgf("Subscribe stopped for targetCache '%s': %v", t.name, err)
 	}
 }
 
