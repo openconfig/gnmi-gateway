@@ -72,10 +72,12 @@ func (m *JSONFileTargetLoader) WatchConfiguration(targetChan chan<- *connections
 			m.config.Log.Error().Err(err).Msgf("Unable to get target configuration.")
 		} else {
 			controlMsg := new(connections.TargetConnectionControl)
-			for targetName := range m.last.Target {
-				_, exists := targetConfig.Target[targetName]
-				if !exists {
-					controlMsg.Remove = append(controlMsg.Remove, targetName)
+			if m.last != nil {
+				for targetName := range m.last.Target {
+					_, exists := targetConfig.Target[targetName]
+					if !exists {
+						controlMsg.Remove = append(controlMsg.Remove, targetName)
+					}
 				}
 			}
 			controlMsg.Insert = targetConfig
