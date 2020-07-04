@@ -18,5 +18,5 @@ package clustering
 type Cluster interface {
 	Register(string) error
 	MemberList() ([]string, error)
-	MemberChangeCallback(func(add string, remove string))
+	MemberChangeCallback(callback MemberChangeCallback) error
 }

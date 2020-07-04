@@ -90,6 +90,8 @@ func TestZookeeperNonBlockingLock_Try(t *testing.T) {
 	// Unlock error
 	err = lock.Unlock()
 	assertion.Error(err, "should not be able to unlock an un-acquired lock")
+
+	conn.Close()
 }
 
 func TestZookeeperNonBlockingLock_GetMember(t *testing.T) {
@@ -115,6 +117,8 @@ func TestZookeeperNonBlockingLock_GetMember(t *testing.T) {
 	member, err := lock_one.GetMember(ZookeeperIntegrationTestID)
 	assertion.NoError(err)
 	assertion.Equal(strReverse(ZookeeperIntegrationTestMember), member)
+
+	conn.Close()
 }
 
 func strReverse(in string) string {

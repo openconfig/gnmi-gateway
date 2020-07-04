@@ -32,4 +32,6 @@ func TestNonBlockingLock_Try(t *testing.T) {
 	acquired, err = lock.Try()
 	assertion.True(acquired)
 	assertion.Errorf(err, "should have a deadlock error")
+
+	assertion.NoError(lock.Unlock())
 }
