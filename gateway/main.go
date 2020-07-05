@@ -23,7 +23,6 @@ import (
 	"os/signal"
 	"runtime/pprof"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
 	"strings"
 	"syscall"
 	"time"
@@ -65,10 +64,6 @@ func Main() {
 
 	opts := new(StartOpts)
 
-	if EnablePrometheus {
-		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(config))
-	}
-
 	gateway := NewGateway(config)
 	err = gateway.StartGateway(opts) // run forever (or until an error happens)
 	if err != nil {
@@ -83,13 +78,13 @@ func Main() {
 func ParseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
 	flag.StringVar(&CPUProfile, "CPUProfile", "", "Specify the name of the file for writing CPU profiling to enable the CPU profiling.")
-	flag.BoolVar(&EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
-	flag.BoolVar(&LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.BoolVar(&PProf, "PProf", false, "Enable the pprof debugging web server.")
 	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit")
 
 	// Configuration Parameters
-	flag.BoolVar(&config.EnableServer, "EnableServer", false, "Enable the gNMI server")
+	flag.BoolVar(&config.EnableGNMIServer, "EnableGNMIServer", false, "Enable the gNMI server")
+	flag.BoolVar(&config.EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
+	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
 	flag.StringVar(&config.ServerAddress, "ServerAddress", "", "The IP address where other cluster members can reach the gNMI server. The first assigned IP address is used if the parameter is not provided")
 	flag.IntVar(&config.ServerPort, "ServerPort", 0, "The TCP port where other cluster members can reach the gNMI server. ServerListenPort is used if the parameter is not provided")
@@ -117,7 +112,7 @@ func ParseArgs(config *configuration.GatewayConfig) {
 func SetupDebugging(config *configuration.GatewayConfig) (func(), error) {
 	var deferFuncs []func()
 
-	if LogCaller {
+	if config.LogCaller {
 		config.Log = config.Log.With().Caller().Logger()
 	}
 

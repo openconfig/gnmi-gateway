@@ -27,10 +27,10 @@ import (
 // ClusterTargetLoader is used internally to connect/disconnect from other cluster members if clustering is enabled.
 type ClusterTargetLoader struct {
 	config  *configuration.GatewayConfig
-	cluster clustering.Cluster
+	cluster clustering.ClusterMember
 }
 
-func NewClusterTargetLoader(config *configuration.GatewayConfig, cluster clustering.Cluster) *ClusterTargetLoader {
+func NewClusterTargetLoader(config *configuration.GatewayConfig, cluster clustering.ClusterMember) *ClusterTargetLoader {
 	return &ClusterTargetLoader{
 		config:  config,
 		cluster: cluster,
@@ -66,8 +66,9 @@ func (c ClusterTargetLoader) GetConfiguration() (*target.Configuration, error) {
 	}
 
 	for _, member := range memberList {
-		targetConfig.Target["*:"+member] = &target.Target{
-			Addresses:   []string{member},
+		memberAddress := string(member)
+		targetConfig.Target[memberAddress] = &target.Target{
+			Addresses:   []string{memberAddress},
 			Credentials: nil,
 			Request:     "all",
 		}
@@ -80,9 +81,8 @@ func (c ClusterTargetLoader) Start() error {
 }
 
 func (c ClusterTargetLoader) WatchConfiguration(configChan chan<- *connections.TargetConnectionControl) error {
-	err := c.cluster.MemberChangeCallback(func(add string, remove string) {
+	err := c.cluster.MemberListCallback(func(add clustering.MemberID, remove clustering.MemberID) {
 		if add != "" {
-			targetName := "*:" + add
 			configChan <- &connections.TargetConnectionControl{
 				Insert: &target.Configuration{
 					Request: map[string]*gnmi.SubscribeRequest{
@@ -104,10 +104,13 @@ func (c ClusterTargetLoader) WatchConfiguration(configChan chan<- *connections.T
 						},
 					},
 					Target: map[string]*target.Target{
-						targetName: {
-							Addresses:   []string{add},
+						string(add): {
+							Addresses:   []string{string(add)},
 							Credentials: nil,
 							Request:     "all",
+							Meta: map[string]string{
+								"NoLock": "yes",
+							},
 						},
 					},
 				},
@@ -115,7 +118,7 @@ func (c ClusterTargetLoader) WatchConfiguration(configChan chan<- *connections.T
 		}
 		if remove != "" {
 			configChan <- &connections.TargetConnectionControl{
-				Remove: []string{"*:" + remove},
+				Remove: []string{string(remove)},
 			}
 		}
 	})

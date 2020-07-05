@@ -42,6 +42,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/locking"
+	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/utils"
 )
 
 // TargetState makes the calls to connect a target, tracks any associated connection state, and is the container for
@@ -54,8 +55,7 @@ type TargetState struct {
 	// lock is the distributed lock that must be acquired before a connection is made if .connectWithLock() is called
 	lock locking.DistributedLocker
 	// The unique name of the target that is being connected to
-	name string
-	// Usually the target name but could be "*"
+	name        string
 	queryTarget string
 	targetCache *cache.Target
 	target      *targetpb.Target
@@ -125,7 +125,19 @@ func (t *TargetState) doConnect() {
 		}
 	}
 
-	query.Target = t.queryTarget
+	var prefixTarget string
+	if t.request.GetSubscribe() != nil && t.request.GetSubscribe().GetPrefix() != nil {
+		prefixTarget = t.request.GetSubscribe().GetPrefix().GetTarget()
+	}
+
+	if prefixTarget != "" {
+		query.Target = prefixTarget
+		t.queryTarget = prefixTarget
+	} else {
+		query.Target = t.name
+		t.queryTarget = t.name
+	}
+
 	query.Timeout = t.config.TargetDialTimeout
 
 	query.ProtoHandler = t.handleUpdate
@@ -279,9 +291,9 @@ func (t *TargetState) updateTargetCache(cache *cache.Target, update *gnmipb.Noti
 		switch err.Error() {
 		case "suppressed duplicate value":
 		case "update is stale":
-			t.config.Log.Warn().Msgf("%s: from target '%s': %+v", err, t.name, update)
+			t.config.Log.Warn().Msgf("%s: from target '%s': %+v", err, t.name, utils.GNMINotificationPrettyString(update))
 		default:
-			return fmt.Errorf("targetCache cache update error: %v: %+v", err, update)
+			return fmt.Errorf("targetCache cache update error: %v: %+v", err, utils.GNMINotificationPrettyString(update))
 		}
 	}
 	return nil

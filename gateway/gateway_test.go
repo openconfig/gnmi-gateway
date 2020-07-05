@@ -27,7 +27,7 @@ import (
 // A simple example of how to configure the gateway.
 func Example() {
 	config := &configuration.GatewayConfig{
-		EnableServer:                 true,
+		EnableGNMIServer:             true,
 		OpenConfigDirectory:          "./oc-models",
 		ServerListenPort:             2906,
 		ServerTLSCert:                "server.crt",

@@ -55,7 +55,7 @@
 // See the example below or the Main() function in gateway.go for an example of how to start the server.
 // If you'd like to just use the built-in loaders and exporters you can configure them more easily from the command line:
 // 		go build
-//		./gnmi-gateway -EnableServer -EnablePrometheus -OpenConfigDirectory=./oc-models/
+//		./gnmi-gateway -EnableGNMIServer -EnablePrometheus -OpenConfigDirectory=./oc-models/
 package gateway
 
 import (
@@ -91,17 +91,15 @@ var (
 )
 
 var (
-	CPUProfile       string
-	EnablePrometheus bool
-	LogCaller        bool
-	PrintVersion     bool
-	PProf            bool
+	CPUProfile   string
+	PrintVersion bool
+	PProf        bool
 )
 
 type Gateway struct {
 	clientLock sync.Mutex
 	clients    []func(leaf *ctree.Leaf)
-	cluster    clustering.Cluster
+	cluster    clustering.ClusterMember
 	config     *configuration.GatewayConfig
 	zkConn     *zk.Conn
 }
@@ -140,8 +138,8 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	var err error
 	var clusterMember string
 	if g.config.ZookeeperHosts != nil && len(g.config.ZookeeperHosts) > 0 {
-		if !g.config.EnableServer {
-			return errors.New("gNMI server is required for clustering: Set -EnableServer or disable clustering by removing -ZookeeperHosts")
+		if !g.config.EnableGNMIServer {
+			return errors.New("gNMI server is required for clustering: Set -EnableGNMIServer or disable clustering by removing -ZookeeperHosts")
 		}
 
 		if g.config.ServerAddress == "" {
@@ -162,7 +160,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 			g.config.Log.Error().Msgf("Unable to connect to Zookeeper: %v", err)
 			return err
 		}
-		g.cluster = clustering.NewZookeeperCluster(g.config, g.zkConn, clusterMember)
+		g.cluster = clustering.NewZookeeperClusterMember(g.config, g.zkConn, clusterMember)
 		g.config.Log.Info().Msg("Clustering is enabled.")
 	} else {
 		g.config.Log.Info().Msg("Clustering is NOT enabled. No locking or cluster coordination will happen.")
@@ -180,13 +178,13 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	}
 	connMgr.Cache().SetClient(g.sendUpdateToClients)
 
-	if g.config.EnableServer {
+	if g.config.EnableGNMIServer {
 		if g.config.ServerListenAddress == "" {
-			return fmt.Errorf("ServerListenAddress can't be empty with -EnableServer")
+			return fmt.Errorf("ServerListenAddress can't be empty with -EnableGNMIServer")
 		}
 
 		if g.config.ServerListenPort == 0 {
-			return fmt.Errorf("ServerListenPort can't be empty with -EnableServer")
+			return fmt.Errorf("ServerListenPort can't be empty with -EnableGNMIServer")
 		}
 
 		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerListenPort)
@@ -214,6 +212,10 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 	if g.config.TargetJSONFile != "" {
 		opts.TargetLoaders = append(opts.TargetLoaders, targets.NewJSONFileTargetLoader(g.config))
+	}
+
+	if g.config.EnablePrometheus {
+		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(g.config))
 	}
 
 	for _, loader := range opts.TargetLoaders {
@@ -305,7 +307,7 @@ type ZKLogger struct {
 }
 
 func (z *ZKLogger) Printf(a string, b ...interface{}) {
-	z.log.Info().Msgf("Zookeeper: %s", fmt.Sprintf(a, b))
+	z.log.Info().Msgf("Zookeeper: %s", fmt.Sprintf(a, b...))
 }
 
 func (g *Gateway) ConnectToZookeeper() (*zk.Conn, error) {

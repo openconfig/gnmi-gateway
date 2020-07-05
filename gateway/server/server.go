@@ -32,7 +32,8 @@ limitations under the License.
 // Portions of this file including Server and it's receivers (excluding modifications) are from
 // https://github.com/openconfig/gnmi/blob/d2b4e6a45802a75b3571a627519cae85a197fdda/subscribe/subscribe.go
 
-// Package server implements the gnmi.proto service API. Currently only the Subscribe interface is implemented.
+// Package server implements the gnmi.proto service API.
+// Currently only the Subscribe interface is implemented.
 package server
 
 import (
@@ -104,7 +105,7 @@ type Server struct {
 	a       ACL          // server ACL.
 	config  *configuration.GatewayConfig
 	connMgr *connections.ConnectionManager
-	cluster clustering.Cluster
+	cluster clustering.ClusterMember
 	// subscribeSlots is a channel of size SubscriptionLimit to restrict how many
 	// queries are in flight.
 	subscribeSlots chan struct{}
@@ -114,7 +115,7 @@ type Server struct {
 type GNMIServerOpts struct {
 	Config  *configuration.GatewayConfig
 	Cache   *cache.Cache
-	Cluster clustering.Cluster
+	Cluster clustering.ClusterMember
 	ConnMgr *connections.ConnectionManager
 }
 
@@ -204,9 +205,9 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 	case c.sr.GetSubscribe() == nil:
 		return status.Errorf(codes.InvalidArgument, "request must contain a subscription %#v", c.sr)
 	case c.sr.GetSubscribe().GetPrefix() == nil:
-		return status.Errorf(codes.InvalidArgument, "request must contain a prefix %#v", c.sr)
+		return status.Errorf(codes.InvalidArgument, "request subscription must contain a prefix %#v", c.sr)
 	case c.sr.GetSubscribe().GetPrefix().GetTarget() == "":
-		return status.Error(codes.InvalidArgument, "missing target")
+		return status.Errorf(codes.InvalidArgument, "request subscription prefix must contain a target %#v", c.sr)
 	}
 
 	c.target = c.sr.GetSubscribe().GetPrefix().GetTarget()
@@ -237,6 +238,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 	defer c.queue.Close()
 
 	// reject single device subscription if not allowed by ACL
+	// TODO: Fix ACL check for wildcard targets.
 	if c.target != "*" && !c.acl.Check(c.target) {
 		return status.Errorf(codes.PermissionDenied, "not authorized for target %q", c.target)
 	}
@@ -556,14 +558,14 @@ func MakeSubscribeResponse(n interface{}, dup uint32) (*pb.SubscribeResponse, er
 }
 
 // memberAddressInMemberList will return true of the IP portion of the supplied address is present in the member list.
-func memberAddressInMemberList(addr string, list []string) bool {
+func memberAddressInMemberList(addr string, list []clustering.MemberID) bool {
 	ipParts := strings.Split(addr, ":")
 	if len(ipParts) < 1 || ipParts[0] == "" {
 		return false
 	}
 
 	for _, v := range list {
-		memberParts := strings.Split(v, ":")
+		memberParts := strings.Split(string(v), ":")
 		if len(memberParts) < 1 || memberParts[0] == "" {
 			continue
 		}

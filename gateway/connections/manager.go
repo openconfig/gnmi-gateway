@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package connections provides the connection manager that forms the transport connection
+// to gNMI targets and initiates gNMI RPC calls. If clustering is enabled the connection
+// manager will attempt to acquire a lock for each
 package connections
 
 import (
@@ -142,36 +145,26 @@ func (c *ConnectionManager) ReloadTargets() {
 				for name, newConfig := range targetControlMsg.Insert.Target {
 					if _, exists := newTargets[name]; exists {
 						continue
-					} else if strings.HasPrefix(name, "*:") {
-						c.config.Log.Info().Msgf("Initializing wildcard target %s.", name)
-						newTargets[name] = &TargetState{
-							config:      c.config,
-							connManager: c,
-							name:        name,
-							queryTarget: "*",
-							target:      newConfig,
-							request:     targetControlMsg.Insert.Request[newConfig.Request],
-						}
-						go newTargets[name].connect(c.connLimit)
 					} else {
-						lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, name)
-						clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
 						// no previous targetCache existed
-						c.config.Log.Info().Msgf("Initializing target %s.", name)
+						c.config.Log.Info().Msgf("Initializing target %s (%v) %v.", name, newConfig.Addresses, newConfig.Meta)
 						newTargets[name] = &TargetState{
 							config:      c.config,
 							connManager: c,
-							lock:        locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll)),
 							name:        name,
-							queryTarget: name,
 							targetCache: c.cache.Add(name),
 							target:      newConfig,
 							request:     targetControlMsg.Insert.Request[newConfig.Request],
 						}
-						if c.zkConn != nil {
-							go newTargets[name].connectWithLock(c.connLimit)
-						} else {
+
+						_, noLock := newConfig.Meta["NoLock"]
+						if c.zkConn == nil || noLock {
 							go newTargets[name].connect(c.connLimit)
+						} else {
+							lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, name)
+							clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
+							newTargets[name].lock = locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll))
+							go newTargets[name].connectWithLock(c.connLimit)
 						}
 					}
 				}
