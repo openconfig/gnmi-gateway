@@ -26,31 +26,31 @@ import (
 const ClusterMemberPath = "/members"
 const DefaultACLPerms = zk.PermAll
 
-type ZookeeperCluster struct {
+type ZookeeperClusterMember struct {
 	acl            []zk.ACL
 	config         *configuration.GatewayConfig
 	conn           *zk.Conn
 	callbackCancel func()
-	member         string
+	member         MemberID
 }
 
-func NewZookeeperCluster(config *configuration.GatewayConfig, conn *zk.Conn, member string) *ZookeeperCluster {
-	return &ZookeeperCluster{
+func NewZookeeperClusterMember(config *configuration.GatewayConfig, conn *zk.Conn, member string) *ZookeeperClusterMember {
+	return &ZookeeperClusterMember{
 		acl:    zk.WorldACL(DefaultACLPerms),
 		config: config,
 		conn:   conn,
-		member: member,
+		member: MemberID(member),
 	}
 }
 
-func (z *ZookeeperCluster) Member() string {
+func (z *ZookeeperClusterMember) MemberID() MemberID {
 	return z.member
 }
 
 // Register will create an ephemeral Zookeeper node in a cluster member tree. The node
 // will be removed automatically by Zookeeper if the session disconnects.
-func (z *ZookeeperCluster) Register() error {
-	registrationPath := CleanPath(z.config.ZookeeperPrefix) + CleanPath(ClusterMemberPath) + CleanPath(z.member)
+func (z *ZookeeperClusterMember) Register() error {
+	registrationPath := CleanPath(z.config.ZookeeperPrefix) + CleanPath(ClusterMemberPath) + CleanPath(string(z.member))
 
 	_, err := z.conn.Create(registrationPath, []byte{}, zk.FlagEphemeral, z.acl)
 
@@ -72,12 +72,7 @@ func (z *ZookeeperCluster) Register() error {
 	return nil
 }
 
-type MemberChangeCallback func(add string, remove string)
-
-// MemberChangeCallback will call the callback function once for every member currently in the tree and then
-// again for each future addition and removal. Subsequent calls to MemberChangeCallback will cancel previous
-// callbacks.
-func (z *ZookeeperCluster) MemberChangeCallback(callback MemberChangeCallback) error {
+func (z *ZookeeperClusterMember) MemberListCallback(callback MemberListCallbackFunc) error {
 	searchPath := CleanPath(z.config.ZookeeperPrefix) + CleanPath(ClusterMemberPath)
 
 	if z.callbackCancel != nil {
@@ -87,10 +82,10 @@ func (z *ZookeeperCluster) MemberChangeCallback(callback MemberChangeCallback) e
 	var stopped bool
 	go func() {
 		// TODO (cmcintosh): This whole goroutine has awful error handling and needs to be rewritten.
-		var previousMembers []string
+		var previousMembers []MemberID
 		var consecutiveErrors = 0
 		for !stopped {
-			currentMembers, _, memberListChanges, err := z.conn.ChildrenW(searchPath)
+			children, _, memberListChanges, err := z.conn.ChildrenW(searchPath)
 
 			//if err == zk.ErrNoNode {
 			//	createErr := CreatePath(z.conn, searchPath, z.acl)
@@ -114,21 +109,25 @@ func (z *ZookeeperCluster) MemberChangeCallback(callback MemberChangeCallback) e
 
 			consecutiveErrors = 0
 
-			for _, currentMember := range currentMembers {
+			var currentMembers []MemberID
+			for _, m := range children {
+				currentMember := MemberID(m)
 				if currentMember == z.member {
 					continue
 				}
 
-				if !stringInSlice(currentMember, previousMembers) {
+				if !memberIDInSlice(currentMember, previousMembers) {
 					callback(currentMember, "") // add
 				}
+				currentMembers = append(currentMembers, currentMember)
 			}
+
 			for _, previousMember := range previousMembers {
 				if previousMember == z.member {
 					continue
 				}
 
-				if !stringInSlice(previousMember, currentMembers) {
+				if !memberIDInSlice(previousMember, currentMembers) {
 					callback("", previousMember) // remove
 				}
 			}
@@ -144,8 +143,8 @@ func (z *ZookeeperCluster) MemberChangeCallback(callback MemberChangeCallback) e
 	return nil
 }
 
-func (z *ZookeeperCluster) MemberList() ([]string, error) {
-	var clusterMembers []string
+func (z *ZookeeperClusterMember) MemberList() ([]MemberID, error) {
+	var clusterMembers []MemberID
 
 	searchPath := CleanPath(z.config.ZookeeperPrefix) + CleanPath(ClusterMemberPath)
 	children, _, err := z.conn.Children(searchPath)
@@ -153,12 +152,18 @@ func (z *ZookeeperCluster) MemberList() ([]string, error) {
 		return nil, fmt.Errorf("error while trying to set Zookeeper watch on cluster member tree: %v", err)
 	}
 
-	for _, member := range children {
+	for _, m := range children {
+		member := MemberID(m)
 		if member != "" && member != z.member {
 			clusterMembers = append(clusterMembers, member)
 		}
 	}
 	return clusterMembers, nil
+}
+
+func (z *ZookeeperClusterMember) Unregister() error {
+	// TODO (cmcintosh): implement ZK unregister method.
+	panic("implement me!")
 }
 
 func CreateParentPath(conn *zk.Conn, path string, acl []zk.ACL) error {
@@ -199,7 +204,7 @@ func CleanPath(path string) string {
 	return "/" + strings.Trim(path, "/")
 }
 
-func stringInSlice(s string, list []string) bool {
+func memberIDInSlice(s MemberID, list []MemberID) bool {
 	for _, v := range list {
 		if v == s {
 			return true

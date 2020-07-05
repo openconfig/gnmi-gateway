@@ -70,7 +70,7 @@ func TestZookeeperCluster_Register(t *testing.T) {
 	conn, err := connectToZK()
 	assertion.NoError(err)
 
-	cluster := clustering.NewZookeeperCluster(config, conn, ZookeeperIntegrationTestMemberOne)
+	cluster := clustering.NewZookeeperClusterMember(config, conn, ZookeeperIntegrationTestMemberOne)
 	assertion.NoError(cluster.Register())
 
 	members, err := cluster.MemberList()
@@ -95,7 +95,7 @@ func TestZookeeperCluster_Register(t *testing.T) {
 //		assertion.NoError(fmt.Errorf("unable to delete test node: %v", err))
 //	}
 //
-//	cluster := clustering.NewZookeeperCluster(config, conn, ZookeeperIntegrationTestMemberOne)
+//	cluster := clustering.NewZookeeperClusterMember(config, conn, ZookeeperIntegrationTestMemberOne)
 //	members, err := cluster.MemberList()
 //	assertion.NoError(err)
 //	assertion.Len(members, 0)
@@ -117,8 +117,8 @@ func TestZookeeperCluster_EmptyMemberListCallback(t *testing.T) {
 		assertion.NoError(fmt.Errorf("unable to delete test node: %v", err))
 	}
 
-	cluster := clustering.NewZookeeperCluster(config, conn, ZookeeperIntegrationTestMemberOne)
-	assertion.NoError(cluster.MemberChangeCallback(func(add string, remove string) {}))
+	cluster := clustering.NewZookeeperClusterMember(config, conn, ZookeeperIntegrationTestMemberOne)
+	assertion.NoError(cluster.MemberListCallback(func(add clustering.MemberID, remove clustering.MemberID) {}))
 
 	conn.Close()
 }
@@ -130,7 +130,7 @@ func TestZookeeperCluster_RegisterDuplicate(t *testing.T) {
 	conn, err := connectToZK()
 	assertion.NoError(err)
 
-	cluster := clustering.NewZookeeperCluster(config, conn, ZookeeperIntegrationTestMemberOne)
+	cluster := clustering.NewZookeeperClusterMember(config, conn, ZookeeperIntegrationTestMemberOne)
 	assertion.NoError(cluster.Register())
 	assertion.Error(cluster.Register())
 
@@ -151,8 +151,8 @@ func TestZookeeperCluster_MemberChangeCallback(t *testing.T) {
 	connTwo, err := connectToZK()
 	assertion.NoError(err)
 
-	clusterOne := clustering.NewZookeeperCluster(config, connOne, ZookeeperIntegrationTestMemberOne)
-	clusterTwo := clustering.NewZookeeperCluster(config, connTwo, ZookeeperIntegrationTestMemberTwo)
+	clusterOne := clustering.NewZookeeperClusterMember(config, connOne, ZookeeperIntegrationTestMemberOne)
+	clusterTwo := clustering.NewZookeeperClusterMember(config, connTwo, ZookeeperIntegrationTestMemberTwo)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
@@ -161,7 +161,7 @@ func TestZookeeperCluster_MemberChangeCallback(t *testing.T) {
 	var gotMemberOneAdd = false
 	var gotMemberTwoAdd = false
 	var gotMemberOneRemove = false
-	assertion.NoError(clusterTwo.MemberChangeCallback(func(add string, remove string) {
+	assertion.NoError(clusterTwo.MemberListCallback(func(add clustering.MemberID, remove clustering.MemberID) {
 		if add != "" {
 			if add == ZookeeperIntegrationTestMemberOne {
 				gotMemberOneAdd = true
