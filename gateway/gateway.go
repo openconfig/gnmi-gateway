@@ -225,7 +225,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				g.config.Log.Error().Msgf("Unable to start target loader %T: %v", loader, err)
 				finished <- err
 			}
-			err = loader.WatchConfiguration(connMgr.TargetConfigChan())
+			err = loader.WatchConfiguration(connMgr.TargetControlChan())
 			if err != nil {
 				finished <- fmt.Errorf("error during target loader %T watch: %v", loader, err)
 			}

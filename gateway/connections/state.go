@@ -71,6 +71,8 @@ type TargetState struct {
 	stopped bool
 }
 
+// Equal returns true if the target config is different than the target config for
+// this TargetState instance.
 func (t *TargetState) Equal(other *targetpb.Target) bool {
 	if len(t.target.Addresses) != len(other.Addresses) {
 		return false
@@ -299,6 +301,8 @@ func (t *TargetState) updateTargetCache(cache *cache.Target, update *gnmipb.Noti
 	return nil
 }
 
+// rejectUpdate returns true if the gNMI notification is unwanted based on the RejectUpdates
+// configuration in GatewayConfig.
 func (t *TargetState) rejectUpdate(notification *gnmipb.Notification) bool {
 	for _, update := range notification.GetUpdate() {
 		path := update.GetPath().GetElem()
