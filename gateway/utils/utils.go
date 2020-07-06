@@ -22,6 +22,8 @@ import (
 	"strings"
 )
 
+// GNMINotificationPrettyString returns a human-readable string for
+// a gnmi.Notification.
 func GNMINotificationPrettyString(notification *gnmi.Notification) string {
 	if notification == nil {
 		return "<nil>"
@@ -55,6 +57,7 @@ func GNMINotificationPrettyString(notification *gnmi.Notification) string {
 	return pretty
 }
 
+// GNMIUpdatePrettyString returns a human-readable string for a gnmi.Update.
 func GNMIUpdatePrettyString(update *gnmi.Update) string {
 	if update == nil {
 		return "<nil>"
@@ -70,6 +73,7 @@ func GNMIUpdatePrettyString(update *gnmi.Update) string {
 	return pretty
 }
 
+// PathToXPath returns an XPath-style string for a gnmi.Path.
 func PathToXPath(path *gnmi.Path) string {
 	var xPath string
 

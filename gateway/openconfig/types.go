@@ -27,6 +27,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Portions of this file including LoadAllModules (excluding modifications) are from
+// https://github.com/openconfig/goyang/blob/6be32aef2bcd1a13b8d2d959bfc9d50673c0f57d/yang.go
+
+// Package openconfig provides useful types and functions for interacting
+// with OpenConfig modeled data.
 package openconfig
 
 import (
@@ -42,6 +47,7 @@ type TypeLookup struct {
 	treeRoot       map[string]*yang.Entry
 }
 
+// GetTypeByPath returns the YANG type string for the given OpenConfig path.
 func (t *TypeLookup) GetTypeByPath(path []string) string {
 	entry, exists := t.treeRoot[path[0]]
 	if exists {
@@ -62,6 +68,7 @@ func getTypeByPath(entry *yang.Entry, path []string) string {
 	}
 }
 
+// GetTypeByPath returns the YANG type string for the given OpenConfig path.
 // Portions of this are originally from github.com/openconfig/goyang/yang.go
 func (t *TypeLookup) LoadAllModules(searchPath string) error {
 	expanded, err := yang.PathsWithModules(searchPath)

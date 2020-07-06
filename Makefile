@@ -13,16 +13,19 @@ clean:
 	rm -f gnmi-gateway
 
 debug: build
-	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -PProf -CPUProfile=cpu.pprof
+	./gnmi-gateway -PProf -CPUProfile=cpu.pprof -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetJSONFile=targets.json
 
 download:
 	if [ -d ./oc-models ]; then git --git-dir=./oc-models/.git pull; else git clone https://github.com/openconfig/public.git oc-models; fi
 
 run: build
-	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key
+	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetJSONFile=targets.json
 
 sync:
 	go get ./...
+
+targets:
+	cp targets-example.json targets.json
 
 test:
 	go test ./...

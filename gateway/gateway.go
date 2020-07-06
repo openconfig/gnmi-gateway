@@ -66,8 +66,8 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
+	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 	"github.com/openconfig/gnmi-gateway/gateway/server"
-	"github.com/openconfig/gnmi-gateway/gateway/targets"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/rs/zerolog"
@@ -107,7 +107,7 @@ type Gateway struct {
 // StartOpts is passed to StartGateway() and is used to set the running configuration
 type StartOpts struct {
 	// Loader for targets
-	TargetLoaders []targets.TargetLoader
+	TargetLoaders []loaders.TargetLoader
 	// Exporters to run
 	Exporters []exporters.Exporter
 }
@@ -207,11 +207,11 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				g.config.Log.Info().Msgf("Registered this cluster member as '%s'", clusterMember)
 			}
 		}()
-		opts.TargetLoaders = append(opts.TargetLoaders, targets.NewClusterTargetLoader(g.config, g.cluster))
+		opts.TargetLoaders = append(opts.TargetLoaders, loaders.NewClusterTargetLoader(g.config, g.cluster))
 	}
 
 	if g.config.TargetJSONFile != "" {
-		opts.TargetLoaders = append(opts.TargetLoaders, targets.NewJSONFileTargetLoader(g.config))
+		opts.TargetLoaders = append(opts.TargetLoaders, loaders.NewJSONFileTargetLoader(g.config))
 	}
 
 	if g.config.EnablePrometheusExporter {
@@ -219,7 +219,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	}
 
 	for _, loader := range opts.TargetLoaders {
-		go func(loader targets.TargetLoader) {
+		go func(loader loaders.TargetLoader) {
 			err := loader.Start()
 			if err != nil {
 				g.config.Log.Error().Msgf("Unable to start target loader %T: %v", loader, err)

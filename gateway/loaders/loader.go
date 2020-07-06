@@ -13,19 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package targets
+// Package loaders provides an interface load target configurations into the
+// connection manager.
+package loaders
 
 import (
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 )
 
+// TargetLoader is an interface to load target configuration data.
+// TargetLoader communicates with the ConnectionManager via
+// TargetConnectionControl messages that contain targetpb.Configuration.
 type TargetLoader interface {
 	// Get the Configuration once.
 	GetConfiguration() (*targetpb.Configuration, error)
 	// Start the loader, if necessary.
+	// Start will be called once by the gateway after StartGateway is called.
 	Start() error
-	// Start watching the configuration for changes and send the entire Configuration to the supplied channel when
-	// a change is detected.
+	// Start watching the configuration for changes and send the entire
+	// configuration to the supplied channel when a change is detected.
 	WatchConfiguration(chan<- *connections.TargetConnectionControl) error
 }

@@ -22,7 +22,19 @@ import (
 	"github.com/openconfig/gnmi/ctree"
 )
 
+// Exporter is an interface to send data to other systems and protocols.
 type Exporter interface {
+	// Start will be called once by the gateway.Gateway after StartGateway
+	// is called. It will receive a pointer to the cache.Cache that
+	// receives all of the updates from gNMI targets that the gateway has a
+	// subscription for. If Start returns an error the gateway will fail to
+	// start with an error.
 	Start(*cache.Cache) error
+	// Export will be called once for every gNMI notification that is inserted
+	// into the cache.Cache. Export should complete as quickly as possible to
+	// prevent delays in the system and upstream gNMI clients.
+	// Export receives the leaf parameter which is a *ctree.Leaf type and
+	// has a value of type *gnmipb.Notification. You can access the notification
+	// with a type assertion: leaf.Value().(*gnmipb.Notification)
 	Export(leaf *ctree.Leaf)
 }

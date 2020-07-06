@@ -27,7 +27,10 @@
         "username": "happy",
         "password": "gilmore"
       },
-      "request": "default"
+      "request": "default",
+      "meta": {
+        "NoTLS": "yes"
+      }
     }
   }
 }
