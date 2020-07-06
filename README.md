@@ -1,6 +1,6 @@
 # gNMI Gateway
 
-*gnmi-gateway* is a distributed and highly available service for connecting to multiple gNMI
+**gnmi-gateway** is a distributed and highly available service for connecting to multiple gNMI
 targets. Currently only the gNMI Subscribe RPC is supported.
 
 Common use-cases are:
@@ -10,9 +10,7 @@ Common use-cases are:
 - Distribute gNMI target connections among multiple servers.
 
 
-### Setup Instructions
-
-#### Pre-requisites
+## Pre-requisites
 - Golang 1.13 or newer
 - A target that supports gNMI Subscribe. This is usually a network router or
   switch.
@@ -21,7 +19,8 @@ Common use-cases are:
   you don't need Zookeeper. See the development instructions below for how
   to set up a Zookeeper Docker container.
   
-#### Install
+  
+## Install / Run Instructions
 
 These are the commands that would be used to start gnmi-gateway on a Linux
 install that has `make` installed. If you are not on a platform that is
@@ -40,7 +39,7 @@ to other platforms that support Golang.
     binary built) and then file an issue on Gitub if you are still unsuccessful.
 
   
-### Examples
+## Examples
 
 #### gNMI to Prometheus Exporter
 
@@ -52,7 +51,7 @@ the gnmi-gateway Docker container and connect it to a Prometheus Docker
 container.
 
 
-### Production Deployment
+## Production Deployment
 
 It is recommended that gnmi-gateway be deployed to immutable infrastructure
 such as Kubernetes or an AWS EC2 instance (or something else). New version tags
@@ -77,9 +76,9 @@ may encounter performance issues. You'll likely encounter timeout issues
 with Zookeeper as your latency begins to approach the Zookeeper `tickTime`.
 
 
-### Local Development
+## Local Development
 
-##### Start Zookeeper for development
+#### Start Zookeeper for development
 
 This should ony be used for development and not for production. The
 container will maintain no state; you will have a completely empty
@@ -90,10 +89,10 @@ server on `127.0.0.1:2181` run:
 docker run -d zookeeper
 ```
 
-##### Test the code
+#### Test the code
 
 You can test the code by running `make test`.
 
-##### Build the code
+#### Build the code
 
 You can build the `gnmi-gateway` binary by running `make build`.
