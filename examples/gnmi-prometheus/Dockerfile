@@ -7,6 +7,7 @@ COPY . "${INSTALL_DIR}"
 
 RUN apk add --update make gcc g++ git openssl
 RUN make build
+RUN make download
 RUN make tls
 RUN ./gnmi-gateway -version
 
