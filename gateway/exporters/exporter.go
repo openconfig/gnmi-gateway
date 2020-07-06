@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package exporters provides an interface to export gNMI notifications
+// to other systems or data formats.
 package exporters
 
 import (
