@@ -100,10 +100,10 @@ func (t *TargetState) Equal(other *targetpb.Target) bool {
 
 func (t *TargetState) doConnect() {
 	t.connecting = true
-	t.config.Log.Info().Msgf("Connecting to target %s", t.name)
+	t.config.Log.Info().Msgf("Target %s: Connecting", t.name)
 	query, err := client.NewQuery(t.request)
 	if err != nil {
-		t.config.Log.Error().Msgf("NewQuery(%s): %v", t.request.String(), err)
+		t.config.Log.Error().Msgf("Target %s: unable to create query: NewQuery(%s): %v", t.name, t.request.String(), err)
 		return
 	}
 	query.Addrs = t.target.Addresses
@@ -148,10 +148,12 @@ func (t *TargetState) doConnect() {
 		t.config.Log.Error().Err(err).Msgf("query.Validate(): %v", err)
 		return
 	}
+
+	t.config.Log.Info().Msgf("Target %s: Subscribing", t.name)
 	t.client = client.Reconnect(&client.BaseClient{}, t.disconnected, nil)
 	// Subscribe blocks until .Close() is called
 	if err := t.client.Subscribe(context.Background(), query, gnmiclient.Type); err != nil {
-		t.config.Log.Error().Msgf("Subscribe stopped for targetCache '%s': %v", t.name, err)
+		t.config.Log.Info().Msgf("Target %s: Subscribe stopped: %v", t.name, err)
 	}
 }
 
@@ -186,7 +188,7 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted) {
 				t.ConnectionLockAcquired, _ = t.lock.Try()
 			}
 			if t.ConnectionLockAcquired {
-				t.config.Log.Info().Msgf("Lock acquired for target %s", t.name)
+				t.config.Log.Info().Msgf("Target %s: Lock acquired", t.name)
 				t.doConnect()
 			}
 		}
@@ -197,14 +199,16 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted) {
 	if t.ConnectionLockAcquired {
 		err := t.lock.Unlock()
 		if err != nil {
-			t.config.Log.Warn().Err(err).Msgf("error while releasing lock for target %s: %v", t.name, err)
+			t.config.Log.Warn().Err(err).Msgf("Target %s: error while releasing lock: %v", t.name, err)
 		}
 		t.ConnectionLockAcquired = false
+		t.config.Log.Info().Msgf("Target %s: Lock released", t.name)
 	}
 }
 
 // Disconnect from the target or stop trying to connect.
 func (t *TargetState) disconnect() error {
+	t.config.Log.Info().Msgf("Target %s: Disconnecting", t.name)
 	t.stopped = true
 	return t.client.Close() // this will disconnect and reset the cache via the disconnect callback
 }
@@ -212,10 +216,12 @@ func (t *TargetState) disconnect() error {
 // Callback for gNMI client to signal that it has disconnected.
 func (t *TargetState) disconnected() {
 	t.connected = false
+
 	if t.queryTarget != "*" {
 		t.targetCache.Disconnect()
 		t.targetCache.Reset()
 	}
+	t.config.Log.Info().Msgf("Target %s: Disconnected", t.name)
 }
 
 func (t *TargetState) reconnect() error {
@@ -233,6 +239,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 			t.targetCache.Connect()
 		}
 		t.connected = true
+		t.config.Log.Info().Msgf("Target %s: Connected", t.name)
 	}
 	resp, ok := msg.(*gnmipb.SubscribeResponse)
 	if !ok {
@@ -270,7 +277,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 		}
 
 	case *gnmipb.SubscribeResponse_SyncResponse:
-		t.config.Log.Debug().Msgf("Target is synced: %s", t.name)
+		t.config.Log.Info().Msgf("Target %s: Synced", t.name)
 		switch t.queryTarget {
 		case "*":
 			// do nothing
@@ -293,9 +300,9 @@ func (t *TargetState) updateTargetCache(cache *cache.Target, update *gnmipb.Noti
 		switch err.Error() {
 		case "suppressed duplicate value":
 		case "update is stale":
-			t.config.Log.Warn().Msgf("%s: from target '%s': %+v", err, t.name, utils.GNMINotificationPrettyString(update))
+			t.config.Log.Warn().Msgf("Target %s: %s: %s", t.name, err, utils.GNMINotificationPrettyString(update))
 		default:
-			return fmt.Errorf("targetCache cache update error: %v: %+v", err, utils.GNMINotificationPrettyString(update))
+			return fmt.Errorf("target '%s' cache update error: %v: %+v", t.name, err, utils.GNMINotificationPrettyString(update))
 		}
 	}
 	return nil
