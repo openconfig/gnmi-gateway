@@ -5,7 +5,7 @@ GOLDFLAGS += -X stash.corp.netflix.com/ocnas/gnmi-gateway/gateway.Version=$(VERS
 GOLDFLAGS += -X stash.corp.netflix.com/ocnas/gnmi-gateway/gateway.Buildtime=$(BUILDTIME)
 GOFLAGS = -ldflags "$(GOLDFLAGS)"
 
-build: clean test download
+build: clean test
 	go build -o gnmi-gateway $(GOFLAGS) .
 	./gnmi-gateway -version
 
@@ -13,13 +13,13 @@ clean:
 	rm -f gnmi-gateway
 
 debug: build
-	./gnmi-gateway -EnableServer -EnablePrometheus -OpenConfigDirectory=./oc-models/ -ServerTLSCert=server.crt -ServerTLSKey=server.key -PProf -CPUProfile=cpu.pprof
+	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -PProf -CPUProfile=cpu.pprof
 
 download:
 	if [ -d ./oc-models ]; then git --git-dir=./oc-models/.git pull; else git clone https://github.com/openconfig/public.git oc-models; fi
 
 run: build
-	./gnmi-gateway -EnableServer -EnablePrometheus -OpenConfigDirectory=./oc-models/ -ServerTLSCert=server.crt -ServerTLSKey=server.key
+	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key
 
 sync:
 	go get ./...
@@ -29,7 +29,7 @@ test:
 
 tls:
 	openssl ecparam -genkey -name secp384r1 -out server.key
-	openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+	openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650 -subj "/CN=selfsigned.gnmi-gateway.local"
 
 update:
 	go mod tidy

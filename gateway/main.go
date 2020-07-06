@@ -83,7 +83,7 @@ func ParseArgs(config *configuration.GatewayConfig) {
 
 	// Configuration Parameters
 	flag.BoolVar(&config.EnableGNMIServer, "EnableGNMIServer", false, "Enable the gNMI server")
-	flag.BoolVar(&config.EnablePrometheus, "EnablePrometheus", false, "Enable the Prometheus exporter")
+	flag.BoolVar(&config.EnablePrometheusExporter, "EnablePrometheusExporter", false, "Enable the Prometheus exporter")
 	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
 	flag.StringVar(&config.ServerAddress, "ServerAddress", "", "The IP address where other cluster members can reach the gNMI server. The first assigned IP address is used if the parameter is not provided")

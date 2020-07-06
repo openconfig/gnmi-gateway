@@ -36,15 +36,15 @@ type GatewayConfig struct {
 	// EnableGNMIServer will run the gNMI server (the Subscribe server). TLS options are also required
 	// for the gNMI server to be enabled.
 	EnableGNMIServer bool
-	// EnablePrometheus will enable the Prometheus exporter. OpenConfigDirectory is required
+	// EnablePrometheusExporter will enable the Prometheus exporter. OpenConfigDirectory is required
 	// if Prometheus is enabled.
-	EnablePrometheus bool
+	EnablePrometheusExporter bool
 	// Log is the logger used by the gateway code and gateway packages.
 	Log zerolog.Logger
 	// LogCaller will add the file path and line number to all log messages.
 	LogCaller bool
 	// OpenConfigDirectory is the folder path to a clone of github.com/openconfig/public.
-	// OpenConfigDirectory is required if -EnablePrometheus is set.
+	// OpenConfigDirectory is required if -EnablePrometheusExporter is set.
 	OpenConfigDirectory string
 	// ServerAddress is the address where other cluster members can reach the gNMI server.
 	// The first assigned IP address is used if the parameter is not provided.

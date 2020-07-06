@@ -1,0 +1,32 @@
+{
+  "request": {
+    "default": {
+      "subscribe": {
+        "prefix": {},
+        "subscription": [
+          {
+            "path": {
+              "elem": [
+                {
+                  "name": "interfaces"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "target": {
+    "myrouter.example.com": {
+      "addresses": [
+        "myrouter.example.com:9339"
+      ],
+      "credentials": {
+        "username": "happy",
+        "password": "gilmore"
+      },
+      "request": "default"
+    }
+  }
+}

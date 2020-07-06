@@ -55,7 +55,7 @@
 // See the example below or the Main() function in gateway.go for an example of how to start the server.
 // If you'd like to just use the built-in loaders and exporters you can configure them more easily from the command line:
 // 		go build
-//		./gnmi-gateway -EnableGNMIServer -EnablePrometheus -OpenConfigDirectory=./oc-models/
+//		./gnmi-gateway -EnableGNMIServer -EnablePrometheusExporter -OpenConfigDirectory=./oc-models/
 package gateway
 
 import (
@@ -214,7 +214,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		opts.TargetLoaders = append(opts.TargetLoaders, targets.NewJSONFileTargetLoader(g.config))
 	}
 
-	if g.config.EnablePrometheus {
+	if g.config.EnablePrometheusExporter {
 		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(g.config))
 	}
 
