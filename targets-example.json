@@ -19,7 +19,7 @@
     }
   },
   "target": {
-    "es04.sjc006": {
+    "myrouter.example.com": {
       "addresses": [
         "myrouter.example.com:8888"
       ],
