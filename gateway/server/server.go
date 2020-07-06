@@ -54,9 +54,7 @@ import (
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/match"
 	"github.com/openconfig/gnmi/path"
-	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/unimplemented"
-	"github.com/openconfig/gnmi/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -74,7 +72,7 @@ var (
 	// subscriptions that have not yet synced. Once a streaming subscription has
 	// synced, it no longer counts against the limit. A polling subscription
 	// counts against the limit during each polling cycle while it is processed.
-	SubscriptionLimit = 0
+	//SubscriptionLimit = 0
 	// Value overridden in tests to evaluate SubscriptionLimit enforcement.
 	subscriptionLimitTest = func() {}
 )
@@ -130,9 +128,9 @@ func NewServer(opts *GNMIServerOpts) (*Server, error) {
 		connMgr: opts.ConnMgr,
 		timeout: Timeout,
 	}
-	if SubscriptionLimit > 0 {
-		s.subscribeSlots = make(chan struct{}, SubscriptionLimit)
-	}
+	//if SubscriptionLimit > 0 {
+	//	s.subscribeSlots = make(chan struct{}, SubscriptionLimit)
+	//}
 	return s, nil
 }
 
@@ -263,8 +261,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 				return fmt.Errorf("unable to insert sync marker: %v", err)
 			}
 		}
-		remove := addSubscription(s.m, c.sr.GetSubscribe(),
-			&matchClient{acl: c.acl, q: c.queue})
+		remove := addSubscription(s.m, c.sr.GetSubscribe(), &matchClient{acl: c.acl, q: c.queue})
 		defer remove()
 		if !c.sr.GetSubscribe().GetUpdatesOnly() {
 			go s.processSubscription(&c)
@@ -386,13 +383,15 @@ func (s *Server) processSubscription(c *streamClient) {
 				return
 			}
 			// Note that fullPath doesn't contain target name as the first element.
-			var queryError error
-			queryError = s.c.Query(c.target, fullPath, func(_ []string, l *ctree.Leaf, val interface{}) {
+			err = s.c.Query(c.target, fullPath, func(_ []string, l *ctree.Leaf, val interface{}) {
 				// Stop processing query results on error.
-				if queryError != nil {
+				if err != nil {
 					return
 				}
-				_, queryError = c.queue.Insert(l)
+				if val == nil {
+					return
+				}
+				_, err = c.queue.Insert(l)
 			})
 			if err != nil {
 				return
@@ -476,7 +475,7 @@ func (s *Server) sendStreamingResults(c *streamClient, connMgr *connections.Conn
 		}
 
 		if clusterMember {
-			notification, ok := n.Value().(*gnmipb.Notification)
+			notification, ok := n.Value().(*pb.Notification)
 			if !ok || notification == nil {
 				c.errC <- status.Errorf(codes.Internal, "invalid notification type: %#v", item)
 				return
@@ -533,20 +532,20 @@ func MakeSubscribeResponse(n interface{}, dup uint32) (*pb.SubscribeResponse, er
 			notification = proto.Clone(notification).(*pb.Notification)
 			notification.Update[0].Duplicates = dup
 		}
-	case cache.ClientLeaf:
-		notification = &pb.Notification{}
-		switch v := n.(type) {
-		case client.Delete:
-			notification.Delete = []*pb.Path{{Element: v.Path}}
-			notification.Timestamp = v.TS.UnixNano()
-		case client.Update:
-			typedVal, err := value.FromScalar(v.Val)
-			if err != nil {
-				return nil, err
-			}
-			notification.Update = []*pb.Update{{Path: &pb.Path{Element: v.Path}, Val: typedVal, Duplicates: dup}}
-			notification.Timestamp = v.TS.UnixNano()
-		}
+		//case cache.ClientLeaf:
+		//	notification = &pb.Notification{}
+		//	switch v := n.(type) {
+		//	case client.Delete:
+		//		notification.Delete = []*pb.Path{{Element: v.Path}}
+		//		notification.Timestamp = v.TS.UnixNano()
+		//	case client.Update:
+		//		typedVal, err := value.FromScalar(v.Val)
+		//		if err != nil {
+		//			return nil, err
+		//		}
+		//		notification.Update = []*pb.Update{{Path: &pb.Path{Element: v.Path}, Val: typedVal, Duplicates: dup}}
+		//		notification.Timestamp = v.TS.UnixNano()
+		//	}
 	}
 	response := &pb.SubscribeResponse{
 		Response: &pb.SubscribeResponse_Update{
