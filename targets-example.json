@@ -21,7 +21,7 @@
   "target": {
     "myrouter.example.com": {
       "addresses": [
-        "myrouter.example.com:8888"
+        "myrouter.example.com:9339"
       ],
       "credentials": {
         "username": "happy",
