@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.com/colinmcintosh/gnmi-gateway.svg?token=4PRTtZuk6GbXVpp2sVBw&branch=release)](https://travis-ci.com/colinmcintosh/gnmi-gateway)
 # gNMI Gateway
 
 **gnmi-gateway** is a distributed and highly available service for connecting to multiple gNMI
