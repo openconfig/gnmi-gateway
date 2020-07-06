@@ -17,11 +17,11 @@ package targets
 
 import (
 	"fmt"
+	"github.com/openconfig/gnmi-gateway/gateway/clustering"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/proto/target"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/clustering"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 )
 
 // ClusterTargetLoader is used internally to connect/disconnect from other cluster members if clustering is enabled.

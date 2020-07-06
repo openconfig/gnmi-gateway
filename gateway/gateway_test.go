@@ -17,10 +17,10 @@ package gateway
 
 import (
 	"fmt"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/exporters"
+	"github.com/openconfig/gnmi-gateway/gateway/targets"
 	"os"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/targets"
 	"time"
 )
 

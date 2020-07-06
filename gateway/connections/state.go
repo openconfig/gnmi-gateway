@@ -34,15 +34,15 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/golang/protobuf/proto"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/locking"
+	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/client"
 	gnmiclient "github.com/openconfig/gnmi/client/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"golang.org/x/sync/semaphore"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/locking"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/utils"
 )
 
 // TargetState makes the calls to connect a target, tracks any associated connection state, and is the container for

@@ -16,8 +16,8 @@
 package targets
 
 import (
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	targetpb "github.com/openconfig/gnmi/proto/target"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 )
 
 type TargetLoader interface {

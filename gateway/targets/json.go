@@ -18,11 +18,11 @@ package targets
 import (
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/target"
 	"os"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 	"time"
 )
 

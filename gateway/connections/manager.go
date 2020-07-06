@@ -36,14 +36,14 @@
 package connections
 
 import (
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/locking"
 	"github.com/openconfig/gnmi/cache"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	targetlib "github.com/openconfig/gnmi/target"
 	"github.com/rs/zerolog/log"
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/sync/semaphore"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/locking"
 	"strconv"
 	"strings"
 	"sync"

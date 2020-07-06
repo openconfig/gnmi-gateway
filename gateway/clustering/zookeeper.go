@@ -17,8 +17,8 @@ package clustering
 
 import (
 	"fmt"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/samuel/go-zookeeper/zk"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"strings"
 	"time"
 )

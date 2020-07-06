@@ -15,7 +15,7 @@
 
 package main
 
-import "stash.corp.netflix.com/ocnas/gnmi-gateway/gateway"
+import "github.com/openconfig/gnmi-gateway/gateway"
 
 func main() {
 	gateway.Main()

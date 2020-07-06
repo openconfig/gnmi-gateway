@@ -16,10 +16,10 @@
 package exporters_test
 
 import (
+	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/exporters"
 	"strconv"
 	"testing"
 )

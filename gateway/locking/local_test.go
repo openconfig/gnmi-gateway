@@ -16,8 +16,8 @@
 package locking_test
 
 import (
+	"github.com/openconfig/gnmi-gateway/gateway/locking"
 	"github.com/stretchr/testify/assert"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/locking"
 	"testing"
 )
 

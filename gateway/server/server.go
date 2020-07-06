@@ -40,10 +40,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/openconfig/gnmi-gateway/gateway/clustering"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"io"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/clustering"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/connections"
 	"strings"
 	"time"
 

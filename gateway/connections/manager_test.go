@@ -16,8 +16,8 @@
 package connections
 
 import (
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/stretchr/testify/assert"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"testing"
 )
 

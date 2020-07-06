@@ -18,11 +18,11 @@ package gateway
 import (
 	"flag"
 	"fmt"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime/pprof"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"strings"
 	"syscall"
 	"time"

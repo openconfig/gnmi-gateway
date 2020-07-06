@@ -19,10 +19,10 @@ package clustering_test
 
 import (
 	"fmt"
+	"github.com/openconfig/gnmi-gateway/gateway/clustering"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/samuel/go-zookeeper/zk"
 	"github.com/stretchr/testify/assert"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/clustering"
-	"stash.corp.netflix.com/ocnas/gnmi-gateway/gateway/configuration"
 	"sync"
 	"testing"
 	"time"
