@@ -95,7 +95,7 @@ type GatewayConfig struct {
 
 func NewDefaultGatewayConfig() *GatewayConfig {
 	config := &GatewayConfig{
-		Log: zerolog.New(os.Stderr).With().Timestamp().Logger(),
+		Log: zerolog.New(os.Stderr).With().Timestamp().Logger().Level(zerolog.InfoLevel),
 	}
 	return config
 }
