@@ -388,6 +388,9 @@ func (s *Server) processSubscription(c *streamClient) {
 				if err != nil {
 					return
 				}
+				// BUG (cmcintosh): There is an issue here where Query sends an empty leaf to the
+				//					VisitFunc. Checking for a nil val catches the case but may
+				//					accidentally drop good leafs too[?]. This needs to be looked at.
 				if val == nil {
 					return
 				}
