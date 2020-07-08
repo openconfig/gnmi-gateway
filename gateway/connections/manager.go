@@ -49,21 +49,7 @@ import (
 	"sync"
 )
 
-// NewConnectionManagerDefault creates a new ConnectionManager with an empty *cache.Cache.
-// Start must be called to start listening for changes on the TargetControlChan.
-// Locking will be enabled if zkConn is not nil.
-func NewConnectionManagerDefault(config *configuration.GatewayConfig, zkConn *zk.Conn) (*ConnectionManager, error) {
-	mgr := ConnectionManager{
-		config:            config,
-		connLimit:         semaphore.NewWeighted(int64(config.TargetLimit)),
-		targets:           make(map[string]*TargetState),
-		targetsConfigChan: make(chan *TargetConnectionControl, 10),
-		zkConn:            zkConn,
-	}
-	cache.Type = cache.GnmiNoti
-	mgr.cache = cache.New(nil)
-	return &mgr, nil
-}
+var _ ConnectionManager = new(ZookeeperConnectionManager)
 
 // TargetConnectionControl messages are used to insert/update and remove targets in
 // the ConnectionManager via the TargetControlChan channel.
@@ -89,7 +75,14 @@ func (t *TargetConnectionControl) RemoveCount() int {
 	return len(t.Remove)
 }
 
-type ConnectionManager struct {
+type ConnectionManager interface {
+	Cache() *cache.Cache
+	HasTargetLock(target string) bool
+	Start() error
+	TargetControlChan() chan<- *TargetConnectionControl
+}
+
+type ZookeeperConnectionManager struct {
 	cache             *cache.Cache
 	config            *configuration.GatewayConfig
 	connLimit         *semaphore.Weighted
@@ -99,14 +92,29 @@ type ConnectionManager struct {
 	zkConn            *zk.Conn
 }
 
+// NewConnectionManagerDefault creates a new ConnectionManager with an empty *cache.Cache.
+// Start must be called to start listening for changes on the TargetControlChan.
+// Locking will be enabled if zkConn is not nil.
+func NewConnectionManagerDefault(config *configuration.GatewayConfig, zkConn *zk.Conn) (*ZookeeperConnectionManager, error) {
+	mgr := ZookeeperConnectionManager{
+		config:            config,
+		connLimit:         semaphore.NewWeighted(int64(config.TargetLimit)),
+		targets:           make(map[string]*TargetState),
+		targetsConfigChan: make(chan *TargetConnectionControl, 10),
+		zkConn:            zkConn,
+	}
+	mgr.cache = cache.New(nil)
+	return &mgr, nil
+}
+
 // Cache returns the *cache.Cache that contains gNMI Notifications.
-func (c *ConnectionManager) Cache() *cache.Cache {
+func (c *ZookeeperConnectionManager) Cache() *cache.Cache {
 	return c.cache
 }
 
 // HasTargetLock returns true if this instance of the ConnectionManager holds
 // the lock for the named target.
-func (c *ConnectionManager) HasTargetLock(target string) bool {
+func (c *ZookeeperConnectionManager) HasTargetLock(target string) bool {
 	c.targetsMutex.Lock()
 	targetState, exists := c.targets[target]
 	c.targetsMutex.Unlock()
@@ -117,13 +125,13 @@ func (c *ConnectionManager) HasTargetLock(target string) bool {
 }
 
 // TargetControlChan returns an input channel for TargetConnectionControl messages.
-func (c *ConnectionManager) TargetControlChan() chan<- *TargetConnectionControl {
+func (c *ZookeeperConnectionManager) TargetControlChan() chan<- *TargetConnectionControl {
 	return c.targetsConfigChan
 }
 
 // ReloadTargets is a blocking loop to listen for target configurations from
 // the TargetControlChan and handles connects/reconnects and disconnects to targets.
-func (c *ConnectionManager) ReloadTargets() {
+func (c *ZookeeperConnectionManager) ReloadTargets() {
 	for {
 		select {
 		case targetControlMsg := <-c.targetsConfigChan:
@@ -207,7 +215,7 @@ func (c *ConnectionManager) ReloadTargets() {
 }
 
 // Start will start the loop to listen for TargetConnectionControl messages on TargetControlChan.
-func (c *ConnectionManager) Start() error {
+func (c *ZookeeperConnectionManager) Start() error {
 	go c.ReloadTargets()
 	return nil
 }

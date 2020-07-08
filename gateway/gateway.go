@@ -257,7 +257,7 @@ func (g *Gateway) SendNotificationToClients(n *gnmi.Notification) {
 }
 
 // StartGNMIServer will start the gNMI server that serves the Subscribe interface to downstream gNMI clients.
-func (g *Gateway) StartGNMIServer(connMgr *connections.ConnectionManager) error {
+func (g *Gateway) StartGNMIServer(connMgr connections.ConnectionManager) error {
 	if g.config.ServerTLSCreds == nil {
 		if g.config.ServerTLSCert == "" || g.config.ServerTLSKey == "" {
 			return fmt.Errorf("no TLS creds: you must specify a ServerTLSCert and ServerTLSKey")

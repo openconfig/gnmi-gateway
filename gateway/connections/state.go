@@ -51,7 +51,7 @@ type TargetState struct {
 	ConnectionLockAcquired bool
 	config                 *configuration.GatewayConfig
 	client                 *client.ReconnectClient
-	connManager            *ConnectionManager
+	connManager            ConnectionManager
 	// lock is the distributed lock that must be acquired before a connection is made if .connectWithLock() is called
 	lock locking.DistributedLocker
 	// The unique name of the target that is being connected to
@@ -218,7 +218,6 @@ func (t *TargetState) disconnected() {
 	t.connected = false
 
 	if t.queryTarget != "*" {
-		t.targetCache.Disconnect()
 		t.targetCache.Reset()
 	}
 	t.config.Log.Info().Msgf("Target %s: Disconnected", t.name)
@@ -253,9 +252,9 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 
 		switch t.queryTarget {
 		case "*":
-			targetCache := t.connManager.cache.GetTarget(v.Update.Prefix.Target)
+			targetCache := t.connManager.Cache().GetTarget(v.Update.Prefix.Target)
 			if targetCache == nil {
-				targetCache = t.connManager.cache.Add(v.Update.Prefix.Target)
+				targetCache = t.connManager.Cache().Add(v.Update.Prefix.Target)
 			}
 			err := t.updateTargetCache(targetCache, v.Update)
 			if err != nil {
