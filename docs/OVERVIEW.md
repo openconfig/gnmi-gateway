@@ -1,7 +1,7 @@
 # gnmi-gateway
 
 ## Overview
-Currently there are a few open source services[1] available to consume and
+Currently there are a few open source services\[1] available to consume and
 distribute OpenConfig modeled gNMI streaming telemetry data however none of
 them are currently built for horizontal scalability or high availability.
 Additionally these services are not gNMI-first and don’t consider the need for
@@ -79,7 +79,7 @@ dashboards.
 <img src="./gnmi-gateway-internals.svg">
 
 ## Appendix
-Existing gNMI streaming telemetry consumer services
+\[1] Existing gNMI streaming telemetry consumer services
 - [gnmi_collector][1]
 - [gNMI plugin for Telegraf][2]
 - [Panoptes][3]
