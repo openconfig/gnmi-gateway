@@ -54,7 +54,7 @@ func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
 		if !isNumber {
 			continue
 		}
-		metricName, labels := UpdateToMetricNameAndLabels(update)
+		metricName, labels := UpdateToMetricNameAndLabels(notification.GetPrefix(), update)
 		metricHash := NewStringMapHash(metricName, labels)
 
 		metric, exists := e.metrics[metricHash]
@@ -159,9 +159,17 @@ func GetNumberValues(tv *gnmipb.TypedValue) (float64, bool) {
 	return 0, false
 }
 
-func UpdateToMetricNameAndLabels(update *gnmipb.Update) (string, map[string]string) {
+func UpdateToMetricNameAndLabels(prefix *gnmipb.Path, update *gnmipb.Update) (string, map[string]string) {
 	metricName := ""
 	labels := make(map[string]string)
+
+	if prefix != nil {
+		target := prefix.GetTarget()
+		if target != "" {
+			labels["target"] = target
+		}
+	}
+
 	for _, elem := range update.Path.Elem {
 		elemName := strings.ReplaceAll(elem.Name, "-", "_")
 		if metricName == "" {
