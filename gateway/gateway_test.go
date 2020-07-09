@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
+	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 	"os"
 	"time"
@@ -44,7 +45,7 @@ func Example() {
 	err := gateway.StartGateway(&StartOpts{
 		TargetLoaders: []loaders.TargetLoader{loaders.NewJSONFileTargetLoader(config)},
 		Exporters: []exporters.Exporter{
-			exporters.NewPrometheusExporter(config),
+			prometheus.NewPrometheusExporter(config),
 		},
 	}) // run forever (or until an error happens)
 	if err != nil {

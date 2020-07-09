@@ -13,18 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package exporters_test
+package prometheus_test
 
 import (
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
+	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"strconv"
 	"testing"
 )
 
-func makeExampleLabels(seed int) prometheus.Labels {
+var _ exporters.Exporter = new(prometheus.PrometheusExporter)
+
+func makeExampleLabels(seed int) prom.Labels {
 	rand.Seed(int64(seed))
 	newMap := make(map[string]string)
 	for i := 0; i < 12; i++ {
@@ -40,8 +43,8 @@ func TestMapHash(t *testing.T) {
 
 	testLabels := makeExampleLabels(2906) // randomly selected consistent seed
 
-	firstHash := exporters.NewStringMapHash("test_metric", testLabels)
+	firstHash := prometheus.NewStringMapHash("test_metric", testLabels)
 	for i := 0; i < 100; i++ {
-		assertions.Equal(firstHash, exporters.NewStringMapHash("test_metric", testLabels), "All hashes of the testLabels should be the same.")
+		assertions.Equal(firstHash, prometheus.NewStringMapHash("test_metric", testLabels), "All hashes of the testLabels should be the same.")
 	}
 }

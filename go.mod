@@ -4,6 +4,8 @@ go 1.13
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.1
+	github.com/confluentinc/confluent-kafka-go v1.4.2
+	github.com/golang/mock v1.1.1
 	github.com/golang/protobuf v1.4.0-rc.4.0.20200313231945-b860323f09d0
 	github.com/google/go-cmp v0.4.0
 	github.com/openconfig/gnmi v0.0.0-20200617225440-d2b4e6a45802
