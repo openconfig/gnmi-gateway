@@ -31,7 +31,7 @@ in various networks.
 
 ### Gateway Components
 Reference implementation components for gNMI have been published in the public
-repo: https://github.com/openconfig/gnmi. We will also utilize as much of this
+repo: https://github.com/openconfig/gnmi. We will utilize as much of this
 code as possible in order to reduce the amount of duplicate code and duplicate
 effort. The pieces for the gnmi-gateway that we’ll have to implement outside of
 the available gNMI code are:
