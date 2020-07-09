@@ -77,8 +77,8 @@ func Main() {
 // any calls to flag before calling ParseArgs.
 func ParseArgs(config *configuration.GatewayConfig) {
 	// Execution parameters
-	flag.StringVar(&CPUProfile, "CPUProfile", "", "Specify the name of the file for writing CPU profiling to enable the CPU profiling.")
-	flag.BoolVar(&PProf, "PProf", false, "Enable the pprof debugging web server.")
+	flag.StringVar(&CPUProfile, "CPUProfile", "", "Specify the name of the file for writing CPU profiling to enable the CPU profiling")
+	flag.BoolVar(&PProf, "PProf", false, "Enable the pprof debugging web server")
 	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit")
 
 	// Configuration Parameters

@@ -172,3 +172,16 @@ com_crashlytics_export_strings.xml
 crashlytics.properties
 crashlytics-build.properties
 fabric.properties
+
+# Certificates
+server.crt
+server.key
+
+# Emitted binary
+gnmi-gateway
+
+# OpenConfig models download
+oc-models/
+
+# pprof debugging web server
+cpu.pprof

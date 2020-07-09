@@ -6,12 +6,12 @@ targets. Currently only the [gNMI Subscribe][2] RPC is supported.
 
 Common use-cases are:
 - Provide multiple streams to gNMI clients while maintaining a single
-  connection to gNMI target.
+  connection to gNMI targets.
 - Provide highly available streams to gNMI clients.
 - Distribute gNMI target connections among multiple servers.
 - Export gNMI streams to other data formats and protocols.
 - Dynamically form connections to gNMI targets based on data in other systems
-  (e.g. your NMS, or network inventory, etc).
+  (e.g., your NMS, or network inventory, etc).
   
   
 ## Design
@@ -20,7 +20,7 @@ Common use-cases are:
 
 gnmi-gateway is written in Golang and is designed to be easily extendable
 for users and organizations interested in utilizing gNMI data (modeled with
-[OpenConfig][5]). However if you aren't interested in writing your own code
+[OpenConfig][5]). However, if you aren't interested in writing your own code
 there are a few built-in components to make it easy to use from the
 command-line.
 
@@ -43,13 +43,13 @@ Exporters are components of gnmi-gateway that are used to convert gNMI data
 into other formats and protocols for use by other systems. Some simple
 examples would be sending gNMI notifications to a Kafka stream or
 storing gNMI messages in a data store. Exporters will receive each gNMI message
-in the stream as it is received but also has access to [query][7] the local
+in the stream as it is received but also have access to [query][7] the local
 gNMI cache.
 
-Exporters may be run either on the same servers as your gnmi-gateway
-target connections or you can run exporters on a server and acting as clients
-to another gnmi-gateway cluster. This allows for some flexibility in your
-deployment design.
+Exporters may be run on the same servers as your gnmi-gateway target
+connections or you can run exporters on a server acting as clients to another
+gnmi-gateway cluster. This allows for some flexibility in your deployment
+design.
 
 See `exporters/exporter.go` for details on how to implement the Exporter
 interface.
