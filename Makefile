@@ -11,6 +11,11 @@ build: clean test
 
 clean:
 	rm -f gnmi-gateway
+	rm -f cover.out
+
+cover:
+	go test -count=1 -cover -coverprofile=cover.out ./...
+	go tool cover -func=cover.out
 
 debug: build
 	./gnmi-gateway -PProf -CPUProfile=cpu.pprof -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetJSONFile=targets.json
@@ -28,7 +33,7 @@ targets:
 	cp targets-example.json targets.json
 
 test:
-	go test ./...
+	go test -count=1 -cover ./...
 
 tls:
 	openssl ecparam -genkey -name secp384r1 -out server.key
