@@ -6,7 +6,7 @@ distribute OpenConfig modeled gNMI streaming telemetry data however none of
 them are currently built for horizontal scalability or high availability.
 Additionally these services are not gNMI-first and don’t consider the need for
 _Get_ and _Set_ RPCs along with the _Subscribe_ RPC. In order to fill-in these
-gaps Netflix is building a service, **gnmi-gateway**, that will act as an
+gaps we are building a service, **gnmi-gateway**, that will act as an
 intermediary gateway for consumers utilizing gNMI RPCs.
 
 Initially we plan to focus on the gNMI _Subscribe_ RPC functionality but plan to
@@ -30,21 +30,23 @@ in various networks.
 ## Details
 
 ### Gateway Components
-Google has published reference implementation components for gNMI in the public
+Reference implementation components for gNMI have been published in the public
 repo: https://github.com/openconfig/gnmi. We will also utilize as much of this
 code as possible in order to reduce the amount of duplicate code and duplicate
 effort. The pieces for the gnmi-gateway that we’ll have to implement outside of
 the available gNMI code are:
-- Target configuration from external data, for example: from Netbox or configuration files. 
-- High availability, connection load distribution, and data aggregation (clustering)
+- Target configuration from external data, for example: from Netbox or
+  configuration files. 
+- High availability, connection load distribution, and
+  data aggregation (clustering)
 - Exporters
 
 ### Connection Components
 Within the openconfig/gnmi repo there are 3 components we plan to directly
 utilize:
 - **gnmi/client** -- a fault-tolerant connection manager for gNMI
-- **gnmi/cache** & **gnmi/subscribe** -- libraries for aggregating gNMI messages from
-  multiple clients and serving them in a single stream
+- **gnmi/cache** & **gnmi/subscribe** -- libraries for aggregating gNMI
+  messages from multiple clients and serving them in a single stream
 
 The system will maintain a lock for each connection which will be used for
 inter-instance signaling to provide high-availability for the gNMI target
