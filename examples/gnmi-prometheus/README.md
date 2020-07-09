@@ -1,12 +1,13 @@
 # gNMI Prometheus Exporter Example
 
 This is an example of how to setup gnmi-gateway with the Prometheus Exporter
- enabled.
+enabled.
 
 #### Instructions
 
-1.  Copy `targets-example.json` to `targets.json` and modify `targets.json` to match the
-    details of the gNMI target you want to connect to (your router).
+1.  Copy `targets-example.json` from the project root to
+    `example/gnmi-prometheus/targets.json` and modify `targets.json` to match
+    the details of the gNMI target you want to connect to (your router).
 2.  cd to the root of the gnmi-gateway git repository. You can't build from this directory
     due to build context restrictions imposed by Docker.
 3.  Build the gnmi-gateway docker image:
