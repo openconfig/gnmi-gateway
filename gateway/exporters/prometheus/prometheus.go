@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package exporters
+package prometheus
 
 import (
 	"errors"
@@ -23,18 +23,18 @@ import (
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/prometheus/client_golang/prometheus"
+	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
 	"strings"
 )
 
-func NewPrometheusExporter(config *configuration.GatewayConfig) Exporter {
+func NewPrometheusExporter(config *configuration.GatewayConfig) *PrometheusExporter {
 	return &PrometheusExporter{
 		config:     config,
 		deltaCalc:  NewDeltaCalculator(),
-		metrics:    make(map[Hash]prometheus.Metric),
+		metrics:    make(map[Hash]prom.Metric),
 		typeLookup: new(openconfig.TypeLookup),
 	}
 }
@@ -43,7 +43,7 @@ type PrometheusExporter struct {
 	config     *configuration.GatewayConfig
 	cache      *cache.Cache
 	deltaCalc  *DeltaCalculator
-	metrics    map[Hash]prometheus.Metric
+	metrics    map[Hash]prom.Metric
 	typeLookup *openconfig.TypeLookup
 }
 
@@ -67,13 +67,13 @@ func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
 
 			switch metricType {
 			case "counter64":
-				metric = promauto.NewCounter(prometheus.CounterOpts{
+				metric = promauto.NewCounter(prom.CounterOpts{
 					Name:        metricName,
 					ConstLabels: labels,
 				})
 			case "gauge32":
 			default:
-				metric = promauto.NewGauge(prometheus.GaugeOpts{
+				metric = promauto.NewGauge(prom.GaugeOpts{
 					Name:        metricName,
 					ConstLabels: labels,
 				})
@@ -82,10 +82,10 @@ func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		switch m := metric.(type) {
-		case prometheus.Counter:
+		case prom.Counter:
 			delta, _ := e.deltaCalc.Calc(metricHash, value)
 			m.Add(delta)
-		case prometheus.Gauge:
+		case prom.Gauge:
 			m.Set(value)
 		}
 	}
@@ -129,6 +129,34 @@ func (e *PrometheusExporter) runHttpServer() {
 			}
 		}
 	}
+}
+
+func GetNumberValues(tv *gnmipb.TypedValue) (float64, bool) {
+	if tv != nil && tv.Value != nil {
+		switch tv.Value.(type) {
+		case *gnmipb.TypedValue_StringVal:
+			return 0, false
+		case *gnmipb.TypedValue_IntVal:
+			return float64(tv.GetIntVal()), true
+		case *gnmipb.TypedValue_UintVal:
+			return float64(tv.GetUintVal()), true
+		case *gnmipb.TypedValue_BoolVal:
+			if tv.GetBoolVal() {
+				return 1, true
+			} else {
+				return 0, false
+			}
+		case *gnmipb.TypedValue_FloatVal:
+			return float64(tv.GetFloatVal()), true
+		case *gnmipb.TypedValue_LeaflistVal:
+			return 0, false
+		case *gnmipb.TypedValue_BytesVal:
+			return 0, false
+		default:
+			return 0, false
+		}
+	}
+	return 0, false
 }
 
 func UpdateToMetricNameAndLabels(update *gnmipb.Update) (string, map[string]string) {

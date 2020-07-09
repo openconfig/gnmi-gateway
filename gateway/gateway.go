@@ -66,6 +66,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
+	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 	"github.com/openconfig/gnmi-gateway/gateway/server"
 	"github.com/openconfig/gnmi/ctree"
@@ -216,7 +217,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	}
 
 	if g.config.EnablePrometheusExporter {
-		opts.Exporters = append(opts.Exporters, exporters.NewPrometheusExporter(g.config))
+		opts.Exporters = append(opts.Exporters, prometheus.NewPrometheusExporter(g.config))
 	}
 
 	for _, loader := range opts.TargetLoaders {

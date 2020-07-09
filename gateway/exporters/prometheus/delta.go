@@ -13,31 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package exporters
+package prometheus
 
 import (
 	"github.com/cespare/xxhash/v2"
-	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"sort"
 	"sync"
 )
-
-type Hash uint64
-
-func NewStringMapHash(name string, labels map[string]string) Hash {
-	keys := make([]string, 0, len(labels))
-	for k := range labels {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	var hash string
-	for _, k := range keys {
-		hash += k
-		hash += labels[k]
-	}
-	return Hash(xxhash.Sum64String(name + hash))
-}
 
 func NewDeltaCalculator() *DeltaCalculator {
 	return &DeltaCalculator{
@@ -59,30 +41,19 @@ func (d *DeltaCalculator) Calc(hash Hash, newValue float64) (float64, bool) {
 	return newValue - oldValue, exists
 }
 
-func GetNumberValues(tv *gnmipb.TypedValue) (float64, bool) {
-	if tv != nil && tv.Value != nil {
-		switch tv.Value.(type) {
-		case *gnmipb.TypedValue_StringVal:
-			return 0, false
-		case *gnmipb.TypedValue_IntVal:
-			return float64(tv.GetIntVal()), true
-		case *gnmipb.TypedValue_UintVal:
-			return float64(tv.GetUintVal()), true
-		case *gnmipb.TypedValue_BoolVal:
-			if tv.GetBoolVal() {
-				return 1, true
-			} else {
-				return 0, false
-			}
-		case *gnmipb.TypedValue_FloatVal:
-			return float64(tv.GetFloatVal()), true
-		case *gnmipb.TypedValue_LeaflistVal:
-			return 0, false
-		case *gnmipb.TypedValue_BytesVal:
-			return 0, false
-		default:
-			return 0, false
-		}
+type Hash uint64
+
+func NewStringMapHash(name string, labels map[string]string) Hash {
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
 	}
-	return 0, false
+	sort.Strings(keys)
+
+	var hash string
+	for _, k := range keys {
+		hash += k
+		hash += labels[k]
+	}
+	return Hash(xxhash.Sum64String(name + hash))
 }
