@@ -112,6 +112,7 @@ type StartOpts struct {
 	Exporters []exporters.Exporter
 }
 
+// NewGateway returns an new Gateway instance.
 func NewGateway(config *configuration.GatewayConfig) *Gateway {
 	return &Gateway{
 		clients: []func(leaf *ctree.Leaf){},
@@ -166,7 +167,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		g.config.Log.Info().Msg("Clustering is NOT enabled. No locking or cluster coordination will happen.")
 	}
 
-	connMgr, err := connections.NewConnectionManagerDefault(g.config, g.zkConn)
+	connMgr, err := connections.NewZookeeperConnectionManagerDefault(g.config, g.zkConn)
 	if err != nil {
 		g.config.Log.Error().Msgf("Unable to create connection manager: %v", err)
 		os.Exit(1)
@@ -252,11 +253,15 @@ func (g *Gateway) sendUpdateToClients(leaf *ctree.Leaf) {
 	}
 }
 
+// SendNotificationsToClients forwards gNMI notifications to gateway clients
+// (exporters and the gNMI cache + server) as a detached leaf to bypass
+// the cache.
 func (g *Gateway) SendNotificationToClients(n *gnmi.Notification) {
 	g.sendUpdateToClients(ctree.DetachedLeaf(n))
 }
 
-// StartGNMIServer will start the gNMI server that serves the Subscribe interface to downstream gNMI clients.
+// StartGNMIServer will start the gNMI server that serves the Subscribe
+// interface to downstream gNMI clients.
 func (g *Gateway) StartGNMIServer(connMgr connections.ConnectionManager) error {
 	if g.config.ServerTLSCreds == nil {
 		if g.config.ServerTLSCert == "" || g.config.ServerTLSKey == "" {
