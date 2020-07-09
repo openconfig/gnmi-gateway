@@ -23,6 +23,10 @@ debug: build
 download:
 	if [ -d ./oc-models ]; then git --git-dir=./oc-models/.git pull; else git clone https://github.com/openconfig/public.git oc-models; fi
 
+integration:
+	echo "Integration Test Note: Make sure you have Zookeeper running on 127.0.0.1:2181 (see README)."
+	go test -tags=integration -count=1 -cover ./...
+
 run: build
 	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetJSONFile=targets.json
 
