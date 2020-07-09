@@ -21,10 +21,10 @@ import (
 	"testing"
 )
 
-func TestNewConnectionManagerDefault(t *testing.T) {
+func TestNewZookeeperConnectionManagerDefault(t *testing.T) {
 	assertion := assert.New(t)
 
-	mgr, err := NewConnectionManagerDefault(&configuration.GatewayConfig{}, nil)
+	mgr, err := NewZookeeperConnectionManagerDefault(&configuration.GatewayConfig{}, nil)
 	assertion.NoError(err)
 	assertion.NotNil(mgr)
 }

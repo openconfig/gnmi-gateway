@@ -15,15 +15,17 @@
 
 package locking
 
-// DistributedLocker is an interface for creating non-blocking locks among distributed processes.
+// DistributedLocker is an interface for creating non-blocking locks
+// among distributed processes.
 type DistributedLocker interface {
-	// Try to acquire the lock. If the lock is already acquired return true and a deadlock error.
+	// Try to acquire the lock. If the lock is already acquired return true and
+	// a deadlock error.
 	Try() (bool, error)
 	// Unlock the lock.
 	Unlock() error
 	// Return the ID for this lock.
 	ID() string
-	// Get the member that currently has the lock for the ID, if it's currently locked, otherwise return an
-	// empty string.
+	// Get the member that currently has the lock for the ID, if it's currently
+	// locked, otherwise return an empty string.
 	GetMember(id string) (string, error)
 }

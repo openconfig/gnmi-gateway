@@ -230,7 +230,6 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 	defer c.queue.Close()
 
 	// reject single device subscription if not allowed by ACL
-	// TODO: Fix ACL check for wildcard targets.
 	if c.target != "*" && !c.acl.Check(c.target) {
 		return status.Errorf(codes.PermissionDenied, "not authorized for target %q", c.target)
 	}
