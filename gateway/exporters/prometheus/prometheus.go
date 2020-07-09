@@ -83,8 +83,10 @@ func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
 
 		switch m := metric.(type) {
 		case prom.Counter:
-			delta, _ := e.deltaCalc.Calc(metricHash, value)
-			m.Add(delta)
+			delta, exists := e.deltaCalc.Calc(metricHash, value)
+			if exists {
+				m.Add(delta)
+			}
 		case prom.Gauge:
 			m.Set(value)
 		}
