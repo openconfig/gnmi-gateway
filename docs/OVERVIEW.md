@@ -78,7 +78,7 @@ dashboards.
 
 ### Diagram
 ![gnmi-gateway internals](./gnmi-gateway-internals.svg)
-<img src="./gnmi-gateway-internals.svg">
+\[[diagram source][5]]
 
 ## Appendix
 \[1] Existing gNMI streaming telemetry consumer services
@@ -92,3 +92,4 @@ dashboards.
 [2]: https://github.com/influxdata/telegraf/tree/master/plugins/inputs/gnmi
 [3]: https://github.com/yahoo/panoptes
 [4]: https://github.com/cisco/bigmuddy-network-telemetry-pipeline
+[5]: https://docs.google.com/drawings/d/19UveHFMGCLwX5z3KnV46mkpkiqPk849VuuHdS_XFUyM/edit?usp=sharing
