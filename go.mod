@@ -13,8 +13,8 @@ require (
 	github.com/rs/zerolog v1.17.2
 	github.com/samuel/go-zookeeper v0.0.0-20190923202752-2cc03de413da
 	github.com/stretchr/testify v1.4.0
+	go.uber.org/atomic v1.6.0
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/text v0.3.3 // indirect
 	google.golang.org/grpc v1.27.1
-	rsc.io/sampler v1.99.99 // indirect
 )
