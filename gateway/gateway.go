@@ -69,6 +69,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 	"github.com/openconfig/gnmi-gateway/gateway/server"
+	"github.com/openconfig/gnmi-gateway/gateway/stats"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/rs/zerolog"
@@ -132,6 +133,7 @@ func (g *Gateway) AddClient(newClient func(leaf *ctree.Leaf)) {
 // primary way the server should be started.
 func (g *Gateway) StartGateway(opts *StartOpts) error {
 	g.config.Log.Info().Msg("Starting GNMI Gateway.")
+	stats.GatewayStats.Uint64("starting").Inc()
 
 	// The finished channel to listens for errors from child goroutines.
 	// The first error will cause this function to return.
@@ -191,6 +193,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerListenPort)
 		go func() {
+			stats.GatewayStats.Uint64("server.started").Inc()
 			if err := g.StartGNMIServer(connMgr); err != nil {
 				g.config.Log.Error().Msgf("Unable to start gNMI server: %v", err)
 				finished <- err
@@ -227,6 +230,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				g.config.Log.Error().Msgf("Unable to start target loader %T: %v", loader, err)
 				finished <- err
 			}
+			stats.GatewayStats.Uint64("loaders.started").Inc()
 			err = loader.WatchConfiguration(connMgr.TargetControlChan())
 			if err != nil {
 				finished <- fmt.Errorf("error during target loader %T watch: %v", loader, err)
@@ -242,10 +246,14 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				finished <- err
 			}
 			g.AddClient(exporter.Export)
+			stats.GatewayStats.Uint64("exporters.started").Inc()
 		}(exporter)
 	}
 
-	return <-finished
+	stats.GatewayStats.Uint64("started").Inc()
+	err = <-finished
+	stats.GatewayStats.Uint64("stopped").Inc()
+	return err
 }
 
 func (g *Gateway) sendUpdateToClients(leaf *ctree.Leaf) {

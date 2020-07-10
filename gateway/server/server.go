@@ -43,6 +43,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/clustering"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
+	"github.com/openconfig/gnmi-gateway/gateway/stats"
 	"io"
 	"strings"
 	"time"
@@ -177,6 +178,7 @@ func addSubscription(m *match.Match, s *pb.SubscriptionList, c *matchClient) (re
 // Subscribe is the entry point for the external RPC request of the same name
 // defined in gnmi.proto.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
+	stats.GatewayStats.Uint64("server.subscribe.request").Inc()
 	c := streamClient{stream: stream, acl: &aclStub{}}
 	var err error
 	if s.a != nil {
