@@ -33,9 +33,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/Netflix/spectator-go"
 	"github.com/golang/protobuf/proto"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/locking"
+	"github.com/openconfig/gnmi-gateway/gateway/stats"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/client"
@@ -69,6 +71,21 @@ type TargetState struct {
 	// stopped status signals that .disconnect() has been called we no longer want to connect to this target so we
 	// should stop trying to connect and release any locks that are being held
 	stopped bool
+
+	// metrics
+	metricTags           map[string]string
+	counterNotifications *spectator.Counter
+	counterRejected      *spectator.Counter
+	counterStale         *spectator.Counter
+	counterSync          *spectator.Counter
+}
+
+func (t *TargetState) InitializeMetrics() {
+	t.metricTags = map[string]string{"gateway.client.target": t.name}
+	t.counterNotifications = stats.Registry.Counter("gateway.client.subscribe.notifications", t.metricTags)
+	t.counterRejected = stats.Registry.Counter("gateway.client.subscribe.rejected", t.metricTags)
+	t.counterStale = stats.Registry.Counter("gateway.client.subscribe.stale", t.metricTags)
+	t.counterSync = stats.Registry.Counter("gateway.client.subscribe.sync", t.metricTags)
 }
 
 // Equal returns true if the target config is different than the target config for
@@ -233,6 +250,7 @@ func (t *TargetState) reconnect() error {
 // marked as synchronised.
 func (t *TargetState) handleUpdate(msg proto.Message) error {
 	//fmt.Printf("%+v\n", msg)
+	t.counterNotifications.Increment()
 	if !t.connected {
 		if t.queryTarget != "*" {
 			t.targetCache.Connect()
@@ -247,6 +265,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 	switch v := resp.Response.(type) {
 	case *gnmipb.SubscribeResponse_Update:
 		if t.rejectUpdate(v.Update) {
+			t.counterRejected.Increment()
 			return nil
 		}
 
@@ -277,6 +296,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 
 	case *gnmipb.SubscribeResponse_SyncResponse:
 		t.config.Log.Info().Msgf("Target %s: Synced", t.name)
+		t.counterSync.Increment()
 		switch t.queryTarget {
 		case "*":
 			// do nothing
@@ -299,7 +319,8 @@ func (t *TargetState) updateTargetCache(cache *cache.Target, update *gnmipb.Noti
 		switch err.Error() {
 		case "suppressed duplicate value":
 		case "update is stale":
-			t.config.Log.Warn().Msgf("Target %s: %s: %s", t.name, err, utils.GNMINotificationPrettyString(update))
+			t.counterStale.Increment()
+			//t.config.Log.Warn().Msgf("Target %s: %s: %s", t.name, err, utils.GNMINotificationPrettyString(update))
 		default:
 			return fmt.Errorf("target '%s' cache update error: %v: %+v", t.name, err, utils.GNMINotificationPrettyString(update))
 		}
