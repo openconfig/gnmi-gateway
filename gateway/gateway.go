@@ -133,7 +133,14 @@ func (g *Gateway) AddClient(newClient func(leaf *ctree.Leaf)) {
 // primary way the server should be started.
 func (g *Gateway) StartGateway(opts *StartOpts) error {
 	g.config.Log.Info().Msg("Starting GNMI Gateway.")
-	stats.GatewayStats.Uint64("starting").Inc()
+	stats.Registry.Counter("gateway.starting", stats.NoTags).Increment()
+
+	if g.config.StatsSpectatorConfig != nil || g.config.StatsSpectatorURI != "" {
+		_, err := stats.StartSpectator(g.config)
+		if err != nil {
+			return fmt.Errorf("unable to start Spectator: %v", err)
+		}
+	}
 
 	// The finished channel to listens for errors from child goroutines.
 	// The first error will cause this function to return.
@@ -193,7 +200,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerListenPort)
 		go func() {
-			stats.GatewayStats.Uint64("server.started").Inc()
+			stats.Registry.Counter("gateway.server.started", stats.NoTags).Increment()
 			if err := g.StartGNMIServer(connMgr); err != nil {
 				g.config.Log.Error().Msgf("Unable to start gNMI server: %v", err)
 				finished <- err
@@ -230,7 +237,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				g.config.Log.Error().Msgf("Unable to start target loader %T: %v", loader, err)
 				finished <- err
 			}
-			stats.GatewayStats.Uint64("loaders.started").Inc()
+			stats.Registry.Counter("gateway.loaders.started", stats.NoTags).Increment()
 			err = loader.WatchConfiguration(connMgr.TargetControlChan())
 			if err != nil {
 				finished <- fmt.Errorf("error during target loader %T watch: %v", loader, err)
@@ -246,13 +253,13 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				finished <- err
 			}
 			g.AddClient(exporter.Export)
-			stats.GatewayStats.Uint64("exporters.started").Inc()
+			stats.Registry.Counter("gateway.exporters.started", stats.NoTags).Increment()
 		}(exporter)
 	}
 
-	stats.GatewayStats.Uint64("started").Inc()
+	stats.Registry.Counter("gateway.started", stats.NoTags).Increment()
 	err = <-finished
-	stats.GatewayStats.Uint64("stopped").Inc()
+	stats.Registry.Counter("gateway.stopped", stats.NoTags).Increment()
 	return err
 }
 

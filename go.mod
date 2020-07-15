@@ -3,6 +3,7 @@ module github.com/openconfig/gnmi-gateway
 go 1.13
 
 require (
+	github.com/Netflix/spectator-go v0.1.1
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.4.0-rc.4.0.20200313231945-b860323f09d0
@@ -13,7 +14,6 @@ require (
 	github.com/rs/zerolog v1.17.2
 	github.com/samuel/go-zookeeper v0.0.0-20190923202752-2cc03de413da
 	github.com/stretchr/testify v1.4.0
-	go.uber.org/atomic v1.6.0
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/text v0.3.3 // indirect
 	google.golang.org/grpc v1.27.1
