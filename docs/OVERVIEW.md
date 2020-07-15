@@ -1,13 +1,13 @@
 # gnmi-gateway
 
 ## Overview
-Currently there are a few open source services\[1] available to consume and
-distribute OpenConfig modeled gNMI streaming telemetry data however none of
-them are currently built for horizontal scalability or high availability.
-Additionally these services are not gNMI-first and don’t consider the need for
-_Get_ and _Set_ RPCs along with the _Subscribe_ RPC. In order to fill-in these
-gaps we are building a service, **gnmi-gateway**, that will act as an
-intermediary gateway for consumers utilizing gNMI RPCs.
+Currently there are a few open source services[\[1\]](#Appendix) available
+to consume and distribute OpenConfig modeled gNMI streaming telemetry data
+however none of them are currently built for horizontal scalability or
+high availability. Additionally these services are not gNMI-first and
+don’t consider the need for _Get_ and _Set_ RPCs along with the _Subscribe_ RPC.
+In order to fill-in these gaps we are building a service, **gnmi-gateway**,
+that will act as an intermediary gateway for consumers utilizing gNMI RPCs.
 
 Initially we plan to focus on the gNMI _Subscribe_ RPC functionality but plan to
 eventually include functionality for gNMI _Get_ and _Set_ RPCs. In addition to

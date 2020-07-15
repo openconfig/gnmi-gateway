@@ -1,8 +1,9 @@
 [![Build Status](https://travis-ci.com/colinmcintosh/gnmi-gateway.svg?token=4PRTtZuk6GbXVpp2sVBw&branch=release)](https://travis-ci.com/colinmcintosh/gnmi-gateway)
 # gNMI Gateway
 
-**gnmi-gateway** is a distributed and highly available service for connecting to multiple [gNMI][1]
-targets. Currently only the [gNMI Subscribe][2] RPC is supported.
+**gnmi-gateway** is a distributed and highly available service for connecting
+to multiple [gNMI][1] targets. Currently only the [gNMI Subscribe][2] RPC
+is supported.
 
 Common use-cases are:
 - Provide multiple streams to gNMI clients while maintaining a single
@@ -34,8 +35,9 @@ gnmi-gateway cache, gNMI clients with relevant subscriptions, and
 Target Loaders are components that are used to generate target connection
 configurations that are sent to the connection manager. Target Loaders
 and the connection manager communicate using the [target.proto][6] model
-found in the github.com/openconfig/gnmi repository. See `loaders/loader.go`
-for details on how to implement the TargetLoader interface.
+found in the github.com/openconfig/gnmi repository. See
+[loaders/loader.go](./gateway/loaders/loader.go) for details on how to
+implement the TargetLoader interface.
 
 ### Exporters
 
@@ -51,8 +53,8 @@ connections or you can run exporters on a server acting as clients to another
 gnmi-gateway cluster. This allows for some flexibility in your deployment
 design.
 
-See `exporters/exporter.go` for details on how to implement the Exporter
-interface.
+See [exporters/exporter.go](./gateway/exporters/exporter.go) for details on
+how to implement the Exporter interface.
 
 
 ## Documentation
@@ -102,9 +104,9 @@ to other platforms that support Golang.
 gnmi-gateway ships with an Exporter that allows you to export
 OpenConfig-modeled gNMI data to Prometheus.
 
-See the README in `examples/gnmi-prometheus/` for details on how to start
-the gnmi-gateway Docker container and connect it to a Prometheus Docker
-container.
+See the README in [examples/gnmi-prometheus/](./examples/gnmi-prometheus/)
+for details on how to start the gnmi-gateway Docker container and connect it
+to a Prometheus Docker container.
 
 
 ## Production Deployment
@@ -132,7 +134,9 @@ may encounter performance issues. You'll likely encounter timeout issues
 with Zookeeper as your latency begins to approach the Zookeeper `tickTime`.
 
 
-## Local Development
+## Development
+Check the [to-do](./docs/TODO.md) list for any open known issues or
+new features.
 
 #### Start Zookeeper for development
 
@@ -149,9 +153,20 @@ docker run -d zookeeper
 
 You can test the code by running `make test`.
 
+You can run integration tests by running `make integration`. (Ensure you have
+Zookeeper running on `127.0.0.1:2181`.)
+
+You can run test coverage by running `make cover`.
+
 #### Build the code
 
 You can build the `gnmi-gateway` binary by running `make build`.
+
+#### Contributions
+
+Please make any changes in a separate branch from `release` (e.g. `develop` or
+your own fork) and make a PR to the `release` branch when your changes are
+ready. Tags for new release versions will be cut from the `release` branch.
 
 
 [1]: https://github.com/openconfig/gnmi
