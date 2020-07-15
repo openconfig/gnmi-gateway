@@ -19,6 +19,7 @@ package configuration
 
 import (
 	"crypto/tls"
+	"github.com/Netflix/spectator-go"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/credentials"
@@ -65,6 +66,14 @@ type GatewayConfig struct {
 	// ServerTLSCert is the path to the file containing the PEM-encoded x509 gNMI server TLS key.
 	// See the gateway package for instructions for generating a self-signed certificate key.
 	ServerTLSKey string
+	// StatsSpectatorConfig is the configuration used for Spectator.
+	// Either this or StatsSpectatorURI must be set to enable sending internal
+	// gnmi-gateway metrics to Atlas.
+	StatsSpectatorConfig *spectator.Config
+	// StatsSpectatorURI is the URI used for sending metrics to Spectator.
+	// Either this or StatsSpectatorConfig must be set to enable sending internal
+	// gnmi-gateway metrics to Atlas.
+	StatsSpectatorURI string
 	// TargetJSONFile is the path to a JSON file containing the configuration for gNMI targets
 	// and subscribe requests. The file will be checked for changes every TargetJSONFileReloadInterval.
 	TargetJSONFile string

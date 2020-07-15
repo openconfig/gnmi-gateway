@@ -92,6 +92,7 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	flag.IntVar(&config.ServerListenPort, "ServerListenPort", 9339, "TCP port to run the gNMI server on")
 	flag.StringVar(&config.ServerTLSCert, "ServerTLSCert", "", "File containing the gNMI server TLS certificate (required to enable the gNMI server)")
 	flag.StringVar(&config.ServerTLSKey, "ServerTLSKey", "", "File containing the gNMI server TLS key (required to enable the gNMI server)")
+	flag.StringVar(&config.StatsSpectatorURI, "StatsSpectatorURI", "", "URI for Atlas server to send Spectator metrics to (required to enable sending internal gateway stats to Atlas)")
 	flag.StringVar(&config.TargetJSONFile, "TargetJSONFile", "", "JSON file containing the target configurations")
 	flag.DurationVar(&config.TargetJSONFileReloadInterval, "TargetJSONFileReloadInterval", 30*time.Second, "Interval to reload the JSON file containing the target configurations")
 	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time")
