@@ -83,6 +83,7 @@ func (c ClusterTargetLoader) Start() error {
 func (c ClusterTargetLoader) WatchConfiguration(configChan chan<- *connections.TargetConnectionControl) error {
 	err := c.cluster.MemberListCallback(func(add clustering.MemberID, remove clustering.MemberID) {
 		if add != "" {
+			c.config.Log.Info().Msgf("Cluster Loader: Add Member: %s", add)
 			configChan <- &connections.TargetConnectionControl{
 				Insert: &target.Configuration{
 					Request: map[string]*gnmi.SubscribeRequest{
@@ -117,6 +118,7 @@ func (c ClusterTargetLoader) WatchConfiguration(configChan chan<- *connections.T
 			}
 		}
 		if remove != "" {
+			c.config.Log.Info().Msgf("Cluster Loader: Remove Member: %s", remove)
 			configChan <- &connections.TargetConnectionControl{
 				Remove: []string{string(remove)},
 			}
