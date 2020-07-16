@@ -136,6 +136,7 @@ func (c *ZookeeperConnectionManager) ReloadTargets() {
 							target:      newConfig,
 							request:     targetControlMsg.Insert.Request[newConfig.Request],
 						}
+						newTargets[name].InitializeMetrics()
 
 						_, noLock := newConfig.Meta["NoLock"]
 						if c.zkConn == nil || noLock {
