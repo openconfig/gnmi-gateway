@@ -81,11 +81,11 @@ type TargetState struct {
 }
 
 func (t *TargetState) InitializeMetrics() {
-	t.metricTags = map[string]string{"gateway.client.target": t.name}
-	t.counterNotifications = stats.Registry.Counter("gateway.client.subscribe.notifications", t.metricTags)
-	t.counterRejected = stats.Registry.Counter("gateway.client.subscribe.rejected", t.metricTags)
-	t.counterStale = stats.Registry.Counter("gateway.client.subscribe.stale", t.metricTags)
-	t.counterSync = stats.Registry.Counter("gateway.client.subscribe.sync", t.metricTags)
+	t.metricTags = map[string]string{"gnmigateway.client.target": t.name}
+	t.counterNotifications = stats.Registry.Counter("gnmigateway.client.subscribe.notifications", t.metricTags)
+	t.counterRejected = stats.Registry.Counter("gnmigateway.client.subscribe.rejected", t.metricTags)
+	t.counterStale = stats.Registry.Counter("gnmigateway.client.subscribe.stale", t.metricTags)
+	t.counterSync = stats.Registry.Counter("gnmigateway.client.subscribe.sync", t.metricTags)
 }
 
 // Equal returns true if the target config is different than the target config for

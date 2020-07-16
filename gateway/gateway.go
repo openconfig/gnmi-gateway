@@ -133,7 +133,7 @@ func (g *Gateway) AddClient(newClient func(leaf *ctree.Leaf)) {
 // primary way the server should be started.
 func (g *Gateway) StartGateway(opts *StartOpts) error {
 	g.config.Log.Info().Msg("Starting GNMI Gateway.")
-	stats.Registry.Counter("gateway.starting", stats.NoTags).Increment()
+	stats.Registry.Counter("gnmigateway.starting", stats.NoTags).Increment()
 
 	if g.config.StatsSpectatorConfig != nil || g.config.StatsSpectatorURI != "" {
 		_, err := stats.StartSpectator(g.config)
@@ -200,7 +200,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerListenPort)
 		go func() {
-			stats.Registry.Counter("gateway.server.started", stats.NoTags).Increment()
+			stats.Registry.Counter("gnmigateway.server.started", stats.NoTags).Increment()
 			if err := g.StartGNMIServer(connMgr); err != nil {
 				g.config.Log.Error().Msgf("Unable to start gNMI server: %v", err)
 				finished <- err
@@ -237,7 +237,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				g.config.Log.Error().Msgf("Unable to start target loader %T: %v", loader, err)
 				finished <- err
 			}
-			stats.Registry.Counter("gateway.loaders.started", stats.NoTags).Increment()
+			stats.Registry.Counter("gnmigateway.loaders.started", stats.NoTags).Increment()
 			err = loader.WatchConfiguration(connMgr.TargetControlChan())
 			if err != nil {
 				finished <- fmt.Errorf("error during target loader %T watch: %v", loader, err)
@@ -253,13 +253,13 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				finished <- err
 			}
 			g.AddClient(exporter.Export)
-			stats.Registry.Counter("gateway.exporters.started", stats.NoTags).Increment()
+			stats.Registry.Counter("gnmigateway.exporters.started", stats.NoTags).Increment()
 		}(exporter)
 	}
 
-	stats.Registry.Counter("gateway.started", stats.NoTags).Increment()
+	stats.Registry.Counter("gnmigateway.started", stats.NoTags).Increment()
 	err = <-finished
-	stats.Registry.Counter("gateway.stopped", stats.NoTags).Increment()
+	stats.Registry.Counter("gnmigateway.stopped", stats.NoTags).Increment()
 	return err
 }
 

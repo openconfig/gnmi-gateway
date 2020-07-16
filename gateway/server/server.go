@@ -179,16 +179,16 @@ func addSubscription(m *match.Match, s *pb.SubscriptionList, c *matchClient) (re
 // defined in gnmi.proto.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 	ctxPeer, _ := peer.FromContext(stream.Context())
-	tags := map[string]string{"gateway.server.subscribe.peer": ctxPeer.Addr.String()}
-	stats.Registry.Counter("gateway.server.subscribe.request", tags).Increment()
+	tags := map[string]string{"gnmigateway.server.subscribe.peer": ctxPeer.Addr.String()}
+	stats.Registry.Counter("gnmigateway.server.subscribe.request", tags).Increment()
 	c := streamClient{stream: stream, acl: &aclStub{}}
 	var err error
 	if s.a != nil {
 		a, err := s.a.NewRPCACL(stream.Context())
 		if err != nil {
 			s.config.Log.Error().Msgf("NewRPCACL fails due to %v", err)
-			tags["gateway.server.subscribe.error_desc"] = "unauthenticated"
-			stats.Registry.Counter("gateway.server.subscribe.error", tags).Increment()
+			tags["gnmigateway.server.subscribe.error_desc"] = "unauthenticated"
+			stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
 			return status.Error(codes.Unauthenticated, "no authentication/authorization for requested operation")
 		}
 		c.acl = a
@@ -201,23 +201,23 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 	case err != nil:
 		return err
 	case c.sr.GetSubscribe() == nil:
-		tags["gateway.server.subscribe.error_desc"] = "bad_request"
-		stats.Registry.Counter("gateway.server.subscribe.error", tags).Increment()
+		tags["gnmigateway.server.subscribe.error_desc"] = "bad_request"
+		stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
 		return status.Errorf(codes.InvalidArgument, "request must contain a subscription %#v", c.sr)
 	case c.sr.GetSubscribe().GetPrefix() == nil:
-		tags["gateway.server.subscribe.error_desc"] = "bad_request"
-		stats.Registry.Counter("gateway.server.subscribe.error", tags).Increment()
+		tags["gnmigateway.server.subscribe.error_desc"] = "bad_request"
+		stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
 		return status.Errorf(codes.InvalidArgument, "request subscription must contain a prefix %#v", c.sr)
 	case c.sr.GetSubscribe().GetPrefix().GetTarget() == "":
-		tags["gateway.server.subscribe.error_desc"] = "bad_request"
-		stats.Registry.Counter("gateway.server.subscribe.error", tags).Increment()
+		tags["gnmigateway.server.subscribe.error_desc"] = "bad_request"
+		stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
 		return status.Errorf(codes.InvalidArgument, "request subscription prefix must contain a target %#v", c.sr)
 	}
 
 	c.target = c.sr.GetSubscribe().GetPrefix().GetTarget()
 	if !s.c.HasTarget(c.target) {
-		tags["gateway.server.subscribe.error_desc"] = "target_not_found"
-		stats.Registry.Counter("gateway.server.subscribe.error", tags).Increment()
+		tags["gnmigateway.server.subscribe.error_desc"] = "target_not_found"
+		stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
 		return status.Errorf(codes.NotFound, "no such target: %q", c.target)
 	}
 
@@ -227,8 +227,8 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 	// Check if peer is a cluster member
 	memberList, err := s.cluster.MemberList()
 	if err != nil {
-		tags["gateway.server.subscribe.error_desc"] = "internal"
-		stats.Registry.Counter("gateway.server.subscribe.error", tags).Increment()
+		tags["gnmigateway.server.subscribe.error_desc"] = "internal"
+		stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
 		return fmt.Errorf("unable to retrieve current cluster member list: %v", err)
 	}
 
@@ -247,8 +247,8 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 
 	// reject single device subscription if not allowed by ACL
 	if c.target != "*" && !c.acl.Check(c.target) {
-		tags["gateway.server.subscribe.error_desc"] = "permission_denied"
-		stats.Registry.Counter("gateway.server.subscribe.error", tags).Increment()
+		tags["gnmigateway.server.subscribe.error_desc"] = "permission_denied"
+		stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
 		return status.Errorf(codes.PermissionDenied, "not authorized for target %q", c.target)
 	}
 	// This error channel is buffered to accept errors from all goroutines spawned
@@ -269,8 +269,8 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 		if c.sr.GetSubscribe().GetUpdatesOnly() {
 			_, err = c.queue.Insert(syncMarker{})
 			if err != nil {
-				tags["gateway.server.subscribe.error_desc"] = "internal"
-				stats.Registry.Counter("gateway.server.subscribe.error", tags).Increment()
+				tags["gnmigateway.server.subscribe.error_desc"] = "internal"
+				stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
 				return fmt.Errorf("unable to insert sync marker: %v", err)
 			}
 		}
@@ -280,8 +280,8 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 			go s.processSubscription(&c)
 		}
 	default:
-		tags["gateway.server.subscribe.error_desc"] = "bad_request"
-		stats.Registry.Counter("gateway.server.subscribe.error", tags).Increment()
+		tags["gnmigateway.server.subscribe.error_desc"] = "bad_request"
+		stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
 		return status.Errorf(codes.InvalidArgument, "Subscription mode %v not recognized", mode)
 	}
 
