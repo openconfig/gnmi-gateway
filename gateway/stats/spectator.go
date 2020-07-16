@@ -31,6 +31,7 @@ func init() {
 	// TODO (cmcintosh): open a PR with Spectator to be able to set the config
 	// 					 on an existing registry.
 	Registry = spectator.NewRegistry(new(spectator.Config))
+	Registry.SetLogger(NewSpectatorLogger(configuration.NewDefaultGatewayConfig()))
 }
 
 type Spectator struct {
@@ -50,6 +51,7 @@ func StartSpectator(config *configuration.GatewayConfig) (*Spectator, error) {
 		config:   config,
 		registry: spectator.NewRegistry(config.StatsSpectatorConfig),
 	}
+	s.registry.SetLogger(NewSpectatorLogger(config))
 	oldRegistry := Registry
 	Registry = s.registry
 
@@ -78,4 +80,24 @@ func DefaultSpectatorConfig(uri string) *spectator.Config {
 		BatchSize:  10000,
 		CommonTags: map[string]string{},
 	}
+}
+
+type SpectatorLogger struct {
+	config *configuration.GatewayConfig
+}
+
+func NewSpectatorLogger(config *configuration.GatewayConfig) *SpectatorLogger {
+	return &SpectatorLogger{config: config}
+}
+
+func (l *SpectatorLogger) Debugf(format string, v ...interface{}) {
+	l.config.Log.Debug().Msgf(format, v...)
+}
+
+func (l *SpectatorLogger) Infof(format string, v ...interface{}) {
+	l.config.Log.Info().Msgf(format, v...)
+}
+
+func (l *SpectatorLogger) Errorf(format string, v ...interface{}) {
+	l.config.Log.Error().Msgf(format, v...)
 }
