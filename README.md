@@ -146,7 +146,7 @@ Zookeeper tree when this starts/restarts. To start zookeeper and expose the
 server on `127.0.0.1:2181` run:
 
 ```shell script
-docker run -d zookeeper
+docker run -d -p 2181:2181 zookeeper
 ```
 
 #### Test the code
