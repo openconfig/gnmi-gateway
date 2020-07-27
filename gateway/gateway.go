@@ -99,11 +99,12 @@ var (
 )
 
 type Gateway struct {
-	clientLock sync.Mutex
-	clients    []func(leaf *ctree.Leaf)
-	cluster    clustering.ClusterMember
-	config     *configuration.GatewayConfig
-	zkConn     *zk.Conn
+	clientLock       sync.Mutex
+	clients          []func(leaf *ctree.Leaf)
+	cluster          clustering.ClusterMember
+	config           *configuration.GatewayConfig
+	zkConn           *zk.Conn
+	zkEventListeners []chan<- zk.Event
 }
 
 // StartOpts is passed to StartGateway() and is used to set the running configuration
@@ -177,7 +178,9 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		g.config.Log.Info().Msg("Clustering is NOT enabled. No locking or cluster coordination will happen.")
 	}
 
-	connMgr, err := connections.NewZookeeperConnectionManagerDefault(g.config, g.zkConn)
+	connZKEventChan := make(chan zk.Event, 1)
+	g.zkEventListeners = append(g.zkEventListeners, connZKEventChan)
+	connMgr, err := connections.NewZookeeperConnectionManagerDefault(g.config, g.zkConn, connZKEventChan)
 	if err != nil {
 		g.config.Log.Error().Msgf("Unable to create connection manager: %v", err)
 		os.Exit(1)
@@ -365,7 +368,11 @@ func (g *Gateway) zookeeperEventHandler(zkEventChan <-chan zk.Event) {
 					g.config.Log.Info().Msgf("Got Zookeeper state update: %v", event.State.String())
 				}
 			}
+			for _, eventChan := range g.zkEventListeners {
+				eventChan <- event
+			}
 		}
+
 	}
 }
 
