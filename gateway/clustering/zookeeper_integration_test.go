@@ -19,9 +19,9 @@ package clustering_test
 
 import (
 	"fmt"
+	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/clustering"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/samuel/go-zookeeper/zk"
 	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"

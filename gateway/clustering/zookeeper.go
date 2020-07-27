@@ -17,8 +17,8 @@ package clustering
 
 import (
 	"fmt"
+	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/samuel/go-zookeeper/zk"
 	"strings"
 	"time"
 )

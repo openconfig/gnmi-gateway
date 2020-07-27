@@ -46,7 +46,7 @@ package locking
 
 import (
 	"fmt"
-	"github.com/samuel/go-zookeeper/zk"
+	"github.com/go-zookeeper/zk"
 	"strconv"
 	"strings"
 	"time"

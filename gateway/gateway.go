@@ -62,6 +62,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/clustering"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
@@ -73,7 +74,6 @@ import (
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/rs/zerolog"
-	"github.com/samuel/go-zookeeper/zk"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"net"
@@ -351,22 +351,19 @@ func (g *Gateway) ConnectToZookeeper() (*zk.Conn, error) {
 }
 
 func (g *Gateway) zookeeperEventHandler(zkEventChan <-chan zk.Event) {
+	var disconnectedCount int
 	for {
 		select {
 		case event := <-zkEventChan:
-			if event.State != zk.StateUnknown {
-				switch event.State {
-				case zk.StateConnected:
-					g.config.Log.Info().Msg("Connected to Zookeeper.")
-				case zk.StateConnecting:
-					g.config.Log.Info().Msg("Attempting to connect to Zookeeper.")
-				case zk.StateDisconnected:
-					g.config.Log.Info().Msg("Zookeeper disconnected.")
-				case zk.StateHasSession:
-					g.config.Log.Info().Msg("Zookeeper session established.")
-				default:
-					g.config.Log.Info().Msgf("Got Zookeeper state update: %v", event.State.String())
+			g.config.Log.Info().Msgf("Zookeeper State: %s", event.State.String())
+			switch event.State {
+			case zk.StateDisconnected:
+				disconnectedCount++
+				if disconnectedCount > 5 {
+					panic("too many Zookeeper disconnects")
 				}
+			case zk.StateHasSession:
+				disconnectedCount = 0
 			}
 			for _, eventChan := range g.zkEventListeners {
 				eventChan <- event
