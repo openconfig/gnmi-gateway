@@ -24,7 +24,7 @@ import (
 func TestNewZookeeperConnectionManagerDefault(t *testing.T) {
 	assertion := assert.New(t)
 
-	mgr, err := NewZookeeperConnectionManagerDefault(&configuration.GatewayConfig{}, nil)
+	mgr, err := NewZookeeperConnectionManagerDefault(&configuration.GatewayConfig{}, nil, nil)
 	assertion.NoError(err)
 	assertion.NotNil(mgr)
 }

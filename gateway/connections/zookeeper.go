@@ -42,7 +42,7 @@ type ZookeeperConnectionManager struct {
 
 // NewZookeeperConnectionManagerDefault creates a new ConnectionManager with an empty *cache.Cache.
 // Locking will be enabled if zkConn is not nil.
-func NewZookeeperConnectionManagerDefault(config *configuration.GatewayConfig, zkConn *zk.Conn) (*ZookeeperConnectionManager, error) {
+func NewZookeeperConnectionManagerDefault(config *configuration.GatewayConfig, zkConn *zk.Conn, zkEvents <-chan zk.Event) (*ZookeeperConnectionManager, error) {
 	mgr := ZookeeperConnectionManager{
 		config:            config,
 		connLimit:         semaphore.NewWeighted(int64(config.TargetLimit)),
@@ -51,7 +51,26 @@ func NewZookeeperConnectionManagerDefault(config *configuration.GatewayConfig, z
 		zkConn:            zkConn,
 	}
 	mgr.cache = cache.New(nil)
+	go mgr.eventListener(zkEvents)
 	return &mgr, nil
+}
+
+func (c *ZookeeperConnectionManager) eventListener(zkEvents <-chan zk.Event) {
+	for {
+		select {
+		case event := <-zkEvents:
+			switch event.State {
+			case zk.StateDisconnected:
+				c.targetsMutex.Lock()
+				for _, targetConfig := range c.targets {
+					if targetConfig.useLock {
+						_ = targetConfig.reconnect()
+					}
+				}
+				c.targetsMutex.Unlock()
+			}
+		}
+	}
 }
 
 func (c *ZookeeperConnectionManager) Cache() *cache.Cache {
@@ -128,6 +147,7 @@ func (c *ZookeeperConnectionManager) ReloadTargets() {
 					} else {
 						// no previous targetCache existed
 						c.config.Log.Info().Msgf("Initializing target %s (%v) %v.", name, newConfig.Addresses, newConfig.Meta)
+						_, noLock := newConfig.Meta["NoLock"]
 						newTargets[name] = &TargetState{
 							config:      c.config,
 							connManager: c,
@@ -135,17 +155,16 @@ func (c *ZookeeperConnectionManager) ReloadTargets() {
 							targetCache: c.cache.Add(name),
 							target:      newConfig,
 							request:     targetControlMsg.Insert.Request[newConfig.Request],
+							useLock:     c.zkConn != nil && !noLock,
 						}
 						newTargets[name].InitializeMetrics()
-
-						_, noLock := newConfig.Meta["NoLock"]
-						if c.zkConn == nil || noLock {
-							go newTargets[name].connect(c.connLimit)
-						} else {
+						if newTargets[name].useLock {
 							lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, name)
 							clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
 							newTargets[name].lock = locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll))
 							go newTargets[name].connectWithLock(c.connLimit)
+						} else {
+							go newTargets[name].connect(c.connLimit)
 						}
 					}
 				}

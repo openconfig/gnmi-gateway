@@ -61,6 +61,7 @@ type TargetState struct {
 	queryTarget string
 	targetCache *cache.Target
 	target      *targetpb.Target
+	useLock     bool
 	request     *gnmipb.SubscribeRequest
 	// connected status is set to true when the first gnmi notification is received.
 	// it gets reset to false when disconnect call back of ReconnectClient is called.
@@ -207,19 +208,17 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted) {
 			if t.ConnectionLockAcquired {
 				t.config.Log.Info().Msgf("Target %s: Lock acquired", t.name)
 				t.doConnect()
+				err := t.lock.Unlock()
+				if err != nil {
+					t.config.Log.Warn().Err(err).Msgf("Target %s: error while releasing lock: %v", t.name, err)
+				}
+				t.ConnectionLockAcquired = false
+				t.config.Log.Info().Msgf("Target %s: Lock released", t.name)
 			}
 		}
 	}
 	if connectionSlotAcquired {
 		connectionSlot.Release(1)
-	}
-	if t.ConnectionLockAcquired {
-		err := t.lock.Unlock()
-		if err != nil {
-			t.config.Log.Warn().Err(err).Msgf("Target %s: error while releasing lock: %v", t.name, err)
-		}
-		t.ConnectionLockAcquired = false
-		t.config.Log.Info().Msgf("Target %s: Lock released", t.name)
 	}
 }
 
@@ -241,6 +240,7 @@ func (t *TargetState) disconnected() {
 }
 
 func (t *TargetState) reconnect() error {
+	t.config.Log.Info().Msgf("Target %s: Reconnecting", t.name)
 	return t.client.Close()
 }
 
