@@ -19,8 +19,8 @@ package locking_test
 
 import (
 	"fmt"
+	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/locking"
-	"github.com/samuel/go-zookeeper/zk"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"

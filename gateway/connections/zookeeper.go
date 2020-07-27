@@ -16,12 +16,12 @@
 package connections
 
 import (
+	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/locking"
 	"github.com/openconfig/gnmi/cache"
 	targetlib "github.com/openconfig/gnmi/target"
 	"github.com/rs/zerolog/log"
-	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/sync/semaphore"
 	"strconv"
 	"strings"
