@@ -85,22 +85,24 @@ func (z *ZookeeperClusterMember) MemberListCallback(callback MemberListCallbackF
 		var previousMembers []MemberID
 		var consecutiveErrors = 0
 		for !stopped {
+			if consecutiveErrors > 3 {
+				panic(fmt.Errorf("too many consecutive errors trying to watch the cluster member tree"))
+			}
+
 			children, _, memberListChanges, err := z.conn.ChildrenW(searchPath)
 
-			//if err == zk.ErrNoNode {
-			//	createErr := CreatePath(z.conn, searchPath, z.acl)
-			//	if createErr != nil {
-			//		err
-			//		z.config.Log.Error().Msgf()
-			//	} else
-			//}
-
+			if err == zk.ErrNoNode {
+				createErr := CreatePath(z.conn, searchPath, z.acl)
+				if createErr != nil {
+					consecutiveErrors++
+					z.config.Log.Error().Msgf("error #%d while trying to create path for cluster member tree: %v", consecutiveErrors, err)
+					continue
+				}
+			}
 			if err != nil {
 				consecutiveErrors++
 				z.config.Log.Error().Msgf("error #%d while trying to set Zookeeper watch on cluster member tree: %v", consecutiveErrors, err)
-				if consecutiveErrors >= 3 {
-					panic(fmt.Errorf("too many consecutive errors trying to watch the cluster member tree"))
-				}
+
 				// Sleep to avoid retrying too quickly
 				// 2*ZookeeperTimeout should be plenty of time if the underlying connection is the issue
 				time.Sleep(2 * z.config.ZookeeperTimeout)
@@ -149,7 +151,7 @@ func (z *ZookeeperClusterMember) MemberList() ([]MemberID, error) {
 	searchPath := CleanPath(z.config.ZookeeperPrefix) + CleanPath(ClusterMemberPath)
 	children, _, err := z.conn.Children(searchPath)
 	if err != nil {
-		return nil, fmt.Errorf("error while trying to set Zookeeper watch on cluster member tree: %v", err)
+		return nil, fmt.Errorf("error while trying to list on cluster members: %v", err)
 	}
 
 	for _, m := range children {
@@ -171,10 +173,10 @@ func CreateParentPath(conn *zk.Conn, path string, acl []zk.ACL) error {
 	return createPath(conn, parts[:len(parts)-1], acl)
 }
 
-//func CreatePath(conn *zk.Conn, path string, acl []zk.ACL) error {
-//	parts := strings.Split(path, "/")
-//	return createPath(conn, parts, acl)
-//}
+func CreatePath(conn *zk.Conn, path string, acl []zk.ACL) error {
+	parts := strings.Split(path, "/")
+	return createPath(conn, parts, acl)
+}
 
 func createPath(conn *zk.Conn, parts []string, acl []zk.ACL) error {
 	pth := ""

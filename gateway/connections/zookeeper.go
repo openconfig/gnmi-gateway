@@ -61,6 +61,7 @@ func (c *ZookeeperConnectionManager) eventListener(zkEvents <-chan zk.Event) {
 		case event := <-zkEvents:
 			switch event.State {
 			case zk.StateDisconnected:
+				c.config.Log.Info().Msgf("Zookeeper disconnected. Resetting locked target connections.")
 				c.targetsMutex.Lock()
 				for _, targetConfig := range c.targets {
 					if targetConfig.useLock {
