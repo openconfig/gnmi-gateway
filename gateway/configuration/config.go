@@ -44,6 +44,8 @@ type GatewayConfig struct {
 	EnableGNMIServer bool `json:"enable_gnmi_server"`
 	// Exporters contains the configuration for the included exporters.
 	Exporters *ExportersConfig `json:"exporters"`
+	// GatewayTransitionBufferSize tunes the size of the buffer between targets and exporters/clients.
+	GatewayTransitionBufferSize int `json:"gateway_transition_buffer_size"`
 	// Log is the logger used by the gateway code and gateway packages.
 	Log zerolog.Logger
 	// LogCaller will add the file path and line number to all log messages.
