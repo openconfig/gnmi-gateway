@@ -58,9 +58,13 @@ func StartSpectator(config *configuration.GatewayConfig) (*Spectator, error) {
 	for _, meter := range oldRegistry.Meters() {
 		switch m := meter.(type) {
 		case *spectator.Counter:
-			Registry.CounterWithId(m.MeterId()).AddFloat(m.Measure()[0].Value())
+			for _, measurement := range m.Measure() {
+				Registry.CounterWithId(m.MeterId()).AddFloat(measurement.Value())
+			}
 		case *spectator.Gauge:
-			Registry.GaugeWithId(m.MeterId()).Set(m.Measure()[0].Value())
+			for _, measurement := range m.Measure() {
+				Registry.GaugeWithId(m.MeterId()).Set(measurement.Value())
+			}
 		}
 	}
 
