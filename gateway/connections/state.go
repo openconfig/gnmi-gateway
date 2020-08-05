@@ -45,6 +45,7 @@ import (
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"golang.org/x/sync/semaphore"
+	"time"
 )
 
 // TargetState makes the calls to connect a target, tracks any associated connection state, and is the container for
@@ -72,9 +73,12 @@ type TargetState struct {
 	// stopped status signals that .disconnect() has been called we no longer want to connect to this target so we
 	// should stop trying to connect and release any locks that are being held
 	stopped bool
+	// synced status signals that a sync message was received from the target.
+	synced bool
 
 	// metrics
 	metricTags           map[string]string
+	timerLatency         *spectator.Timer
 	counterNotifications *spectator.Counter
 	counterRejected      *spectator.Counter
 	counterStale         *spectator.Counter
@@ -83,6 +87,7 @@ type TargetState struct {
 
 func (t *TargetState) InitializeMetrics() {
 	t.metricTags = map[string]string{"gnmigateway.client.target": t.name}
+	t.timerLatency = stats.Registry.Timer("gnmigateway.client.subscribe.latency", t.metricTags)
 	t.counterNotifications = stats.Registry.Counter("gnmigateway.client.subscribe.notifications", t.metricTags)
 	t.counterRejected = stats.Registry.Counter("gnmigateway.client.subscribe.rejected", t.metricTags)
 	t.counterStale = stats.Registry.Counter("gnmigateway.client.subscribe.stale", t.metricTags)
@@ -232,7 +237,7 @@ func (t *TargetState) disconnect() error {
 // Callback for gNMI client to signal that it has disconnected.
 func (t *TargetState) disconnected() {
 	t.connected = false
-
+	t.synced = false
 	if t.queryTarget != "*" {
 		t.targetCache.Reset()
 	}
@@ -269,6 +274,10 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 			return nil
 		}
 
+		if t.synced {
+			t.timerLatency.Record(time.Duration(time.Now().UnixNano() - v.Update.Timestamp))
+		}
+
 		switch t.queryTarget {
 		case "*":
 			targetCache := t.connManager.Cache().GetTarget(v.Update.Prefix.Target)
@@ -296,6 +305,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 
 	case *gnmipb.SubscribeResponse_SyncResponse:
 		t.config.Log.Info().Msgf("Target %s: Synced", t.name)
+
 		t.counterSync.Increment()
 		switch t.queryTarget {
 		case "*":
@@ -309,6 +319,20 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 		return fmt.Errorf("unknown response %T: %v", v, v)
 	}
 	return nil
+}
+
+func (t *TargetState) sync() {
+	t.synced = true
+	go func() {
+		syncMetric := stats.Registry.Gauge("gnmigateway.client.subscribe.synced", t.metricTags)
+		ticker := time.NewTicker(30 * time.Second)
+		for t.synced {
+			select {
+			case <-ticker.C:
+				syncMetric.Set(1)
+			}
+		}
+	}()
 }
 
 func (t *TargetState) updateTargetCache(cache *cache.Target, update *gnmipb.Notification) error {
