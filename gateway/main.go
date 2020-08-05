@@ -19,6 +19,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	_ "github.com/openconfig/gnmi-gateway/gateway/exporters/all"
+	_ "github.com/openconfig/gnmi-gateway/gateway/loaders/all"
 	"net/http"
 	"os"
 	"os/signal"
@@ -83,7 +85,7 @@ func ParseArgs(config *configuration.GatewayConfig) {
 
 	// Configuration Parameters
 	flag.BoolVar(&config.EnableGNMIServer, "EnableGNMIServer", false, "Enable the gNMI server")
-	flag.BoolVar(&config.EnablePrometheusExporter, "EnablePrometheusExporter", false, "Enable the Prometheus exporter")
+	exporters := flag.String("Exporters", "", "Comma-separated list of Exporters to enable.")
 	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
 	flag.StringVar(&config.ServerAddress, "ServerAddress", "", "The IP address where other cluster members can reach the gNMI server. The first assigned IP address is used if the parameter is not provided")
@@ -93,8 +95,9 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	flag.StringVar(&config.ServerTLSCert, "ServerTLSCert", "", "File containing the gNMI server TLS certificate (required to enable the gNMI server)")
 	flag.StringVar(&config.ServerTLSKey, "ServerTLSKey", "", "File containing the gNMI server TLS key (required to enable the gNMI server)")
 	flag.StringVar(&config.StatsSpectatorURI, "StatsSpectatorURI", "", "URI for Atlas server to send Spectator metrics to (required to enable sending internal gateway stats to Atlas)")
-	flag.StringVar(&config.TargetJSONFile, "TargetJSONFile", "", "JSON file containing the target configurations")
-	flag.DurationVar(&config.TargetJSONFileReloadInterval, "TargetJSONFileReloadInterval", 30*time.Second, "Interval to reload the JSON file containing the target configurations")
+	targetLoaders := flag.String("TargetLoaders", "", "Comma-separated list of Target Loaders to enable.")
+	flag.StringVar(&config.TargetLoaders.JSONFile, "TargetJSONFile", "", "JSON file containing the target configurations")
+	flag.DurationVar(&config.TargetLoaders.JSONFileReloadInterval, "TargetJSONFileReloadInterval", 30*time.Second, "Interval to reload the JSON file containing the target configurations")
 	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time")
 	flag.IntVar(&config.TargetLimit, "TargetLimit", 100, "Maximum number of targets that this instance will connect to at once")
 	zkHosts := flag.String("ZookeeperHosts", "", "Comma separated (no spaces) list of zookeeper hosts including port")
@@ -102,11 +105,17 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	flag.DurationVar(&config.ZookeeperTimeout, "ZookeeperTimeout", 1*time.Second, "Zookeeper timeout time. Minimum is 1 second. Failover time is (ZookeeperTimeout * 2)")
 
 	flag.Parse()
-	for _, host := range strings.Split(*zkHosts, ",") {
-		if host != "" {
-			config.ZookeeperHosts = append(config.ZookeeperHosts, host)
-		}
+	config.Exporters.Enabled = cleanSplit(*exporters)
+	config.TargetLoaders.Enabled = cleanSplit(*targetLoaders)
+	config.ZookeeperHosts = cleanSplit(*zkHosts)
+}
+
+func cleanSplit(in string) []string {
+	var out []string
+	for _, s := range strings.Split(in, ",") {
+		out = append(out, strings.TrimSpace(s))
 	}
+	return out
 }
 
 // SetupDebugging optionally sets up debugging features including -LogCaller and -PProf.

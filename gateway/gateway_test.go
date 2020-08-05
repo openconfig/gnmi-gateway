@@ -21,6 +21,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders"
+	"github.com/openconfig/gnmi-gateway/gateway/loaders/json"
 	"os"
 	"time"
 )
@@ -28,22 +29,25 @@ import (
 // A simple example of how to configure the gateway.
 func Example() {
 	config := &configuration.GatewayConfig{
-		EnableGNMIServer:             true,
-		OpenConfigDirectory:          "./oc-models",
-		ServerListenPort:             2906,
-		ServerTLSCert:                "server.crt",
-		ServerTLSKey:                 "server.key",
-		TargetJSONFile:               "targets.json",
-		TargetJSONFileReloadInterval: 60 * time.Second,
-		TargetDialTimeout:            5 * time.Second,
-		TargetLimit:                  100,
-		ZookeeperHosts:               []string{"127.0.0.1"},
-		ZookeeperTimeout:             1 * time.Second,
+		EnableGNMIServer:    true,
+		OpenConfigDirectory: "./oc-models",
+		ServerListenPort:    2906,
+		ServerTLSCert:       "server.crt",
+		ServerTLSKey:        "server.key",
+		TargetLoaders: &configuration.TargetLoadersConfig{
+			Enabled:                []string{"json"},
+			JSONFile:               "targets.json",
+			JSONFileReloadInterval: 60 * time.Second,
+		},
+		TargetDialTimeout: 5 * time.Second,
+		TargetLimit:       100,
+		ZookeeperHosts:    []string{"127.0.0.1"},
+		ZookeeperTimeout:  1 * time.Second,
 	}
 
 	gateway := NewGateway(config)
 	err := gateway.StartGateway(&StartOpts{
-		TargetLoaders: []loaders.TargetLoader{loaders.NewJSONFileTargetLoader(config)},
+		TargetLoaders: []loaders.TargetLoader{json.NewJSONFileTargetLoader(config)},
 		Exporters: []exporters.Exporter{
 			prometheus.NewPrometheusExporter(config),
 		},

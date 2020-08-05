@@ -67,8 +67,8 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
-	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders"
+	"github.com/openconfig/gnmi-gateway/gateway/loaders/cluster"
 	"github.com/openconfig/gnmi-gateway/gateway/server"
 	"github.com/openconfig/gnmi-gateway/gateway/stats"
 	"github.com/openconfig/gnmi/ctree"
@@ -222,15 +222,23 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				g.config.Log.Info().Msgf("Registered this cluster member as '%s'", clusterMember)
 			}
 		}()
-		opts.TargetLoaders = append(opts.TargetLoaders, loaders.NewClusterTargetLoader(g.config, g.cluster))
+		opts.TargetLoaders = append(opts.TargetLoaders, cluster.NewClusterTargetLoader(g.config, g.cluster))
 	}
 
-	if g.config.TargetJSONFile != "" {
-		opts.TargetLoaders = append(opts.TargetLoaders, loaders.NewJSONFileTargetLoader(g.config))
+	for _, name := range g.config.TargetLoaders.Enabled {
+		loader := loaders.New(name, g.config)
+		if loader == nil {
+			return fmt.Errorf("no registered target loader: '%s'", name)
+		}
+		opts.TargetLoaders = append(opts.TargetLoaders, loader)
 	}
 
-	if g.config.EnablePrometheusExporter {
-		opts.Exporters = append(opts.Exporters, prometheus.NewPrometheusExporter(g.config))
+	for _, name := range g.config.Exporters.Enabled {
+		exporter := exporters.New(name, g.config)
+		if exporter == nil {
+			return fmt.Errorf("no registered exporter: '%s'", name)
+		}
+		opts.Exporters = append(opts.Exporters, exporter)
 	}
 
 	for _, loader := range opts.TargetLoaders {

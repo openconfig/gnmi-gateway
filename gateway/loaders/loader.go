@@ -18,9 +18,12 @@
 package loaders
 
 import (
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 )
+
+var Registry = make(map[string]func(config *configuration.GatewayConfig) TargetLoader)
 
 // TargetLoader is an interface to load target configuration data.
 // TargetLoader communicates with the ConnectionManager via
@@ -34,4 +37,16 @@ type TargetLoader interface {
 	// Start watching the configuration for changes and send the entire
 	// configuration to the supplied channel when a change is detected.
 	WatchConfiguration(chan<- *connections.TargetConnectionControl) error
+}
+
+func Register(name string, new func(config *configuration.GatewayConfig) TargetLoader) {
+	Registry[name] = new
+}
+
+func New(name string, config *configuration.GatewayConfig) TargetLoader {
+	exporter, exists := Registry[name]
+	if !exists {
+		return nil
+	}
+	return exporter(config)
 }
