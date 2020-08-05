@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/openconfig"
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
@@ -30,7 +31,11 @@ import (
 	"strings"
 )
 
-func NewPrometheusExporter(config *configuration.GatewayConfig) *PrometheusExporter {
+func init() {
+	exporters.Register("prometheus", NewPrometheusExporter)
+}
+
+func NewPrometheusExporter(config *configuration.GatewayConfig) exporters.Exporter {
 	return &PrometheusExporter{
 		config:     config,
 		deltaCalc:  NewDeltaCalculator(),

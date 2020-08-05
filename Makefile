@@ -18,7 +18,7 @@ cover:
 	go tool cover -func=cover.out
 
 debug: build
-	./gnmi-gateway -PProf -CPUProfile=cpu.pprof -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetJSONFile=targets.json
+	./gnmi-gateway -PProf -CPUProfile=cpu.pprof -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetLoaders=json -TargetJSONFile=targets.json
 
 download:
 	if [ -d ./oc-models ]; then git --git-dir=./oc-models/.git pull; else git clone https://github.com/openconfig/public.git oc-models; fi
@@ -28,7 +28,7 @@ integration:
 	go test -tags=integration -count=1 -cover ./...
 
 run: build
-	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetJSONFile=targets.json
+	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetLoaders=json -TargetJSONFile=targets.json
 
 sync:
 	go get ./...

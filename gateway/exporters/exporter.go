@@ -20,9 +20,12 @@ package exporters
 //go:generate mockgen -destination=exporter_mock_test.go -package=exporters_test github.com/openconfig/gnmi-gateway/gateway/exporters Exporter
 
 import (
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 )
+
+var Registry = make(map[string]func(config *configuration.GatewayConfig) Exporter)
 
 // Exporter is an interface to send data to other systems and protocols.
 type Exporter interface {
@@ -39,4 +42,16 @@ type Exporter interface {
 	// has a value of type *gnmipb.Notification. You can access the notification
 	// with a type assertion: leaf.Value().(*gnmipb.Notification)
 	Export(leaf *ctree.Leaf)
+}
+
+func Register(name string, new func(config *configuration.GatewayConfig) Exporter) {
+	Registry[name] = new
+}
+
+func New(name string, config *configuration.GatewayConfig) Exporter {
+	exporter, exists := Registry[name]
+	if !exists {
+		return nil
+	}
+	return exporter(config)
 }

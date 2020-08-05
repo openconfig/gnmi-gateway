@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package loaders
+package json
 
 import (
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
+	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/target"
 	"os"
@@ -33,11 +34,15 @@ type JSONFileTargetLoader struct {
 	last     *targetpb.Configuration
 }
 
-func NewJSONFileTargetLoader(config *configuration.GatewayConfig) TargetLoader {
+func init() {
+	loaders.Register("json", NewJSONFileTargetLoader)
+}
+
+func NewJSONFileTargetLoader(config *configuration.GatewayConfig) loaders.TargetLoader {
 	return &JSONFileTargetLoader{
 		config:   config,
-		file:     config.TargetJSONFile,
-		interval: config.TargetJSONFileReloadInterval,
+		file:     config.TargetLoaders.JSONFile,
+		interval: config.TargetLoaders.JSONFileReloadInterval,
 	}
 }
 
