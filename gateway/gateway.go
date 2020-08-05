@@ -100,11 +100,17 @@ var (
 
 type Gateway struct {
 	clientLock       sync.Mutex
-	clients          []func(leaf *ctree.Leaf)
+	clients          []*CacheClient
 	cluster          clustering.ClusterMember
 	config           *configuration.GatewayConfig
+	connMgr          connections.ConnectionManager
 	zkConn           *zk.Conn
 	zkEventListeners []chan<- zk.Event
+}
+
+type CacheClient struct {
+	Send     func(leaf *ctree.Leaf)
+	External bool
 }
 
 // StartOpts is passed to StartGateway() and is used to set the running configuration
@@ -118,16 +124,19 @@ type StartOpts struct {
 // NewGateway returns an new Gateway instance.
 func NewGateway(config *configuration.GatewayConfig) *Gateway {
 	return &Gateway{
-		clients: []func(leaf *ctree.Leaf){},
+		clients: []*CacheClient{},
 		config:  config,
 	}
 }
 
 // Client functions need to complete very quickly to prevent blocking upstream.
-func (g *Gateway) AddClient(newClient func(leaf *ctree.Leaf)) {
+func (g *Gateway) AddClient(newClient func(leaf *ctree.Leaf), external bool) {
 	g.clientLock.Lock()
 	defer g.clientLock.Unlock()
-	g.clients = append(g.clients, newClient)
+	g.clients = append(g.clients, &CacheClient{
+		Send:     newClient,
+		External: external,
+	})
 }
 
 // StartGateway starts up all of the loaders and exporters provided by StartOpts. This is the
@@ -181,17 +190,17 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 	connZKEventChan := make(chan zk.Event, 1)
 	g.zkEventListeners = append(g.zkEventListeners, connZKEventChan)
-	connMgr, err := connections.NewZookeeperConnectionManagerDefault(g.config, g.zkConn, connZKEventChan)
+	g.connMgr, err = connections.NewZookeeperConnectionManagerDefault(g.config, g.zkConn, connZKEventChan)
 	if err != nil {
 		g.config.Log.Error().Msgf("Unable to create connection manager: %v", err)
 		os.Exit(1)
 	}
 	g.config.Log.Info().Msg("Starting connection manager.")
-	if err := connMgr.Start(); err != nil {
+	if err := g.connMgr.Start(); err != nil {
 		g.config.Log.Error().Msgf("Unable to start connection manager: %v", err)
 		return err
 	}
-	connMgr.Cache().SetClient(g.sendUpdateToClients)
+	g.connMgr.Cache().SetClient(g.sendUpdateToClients)
 
 	if g.config.EnableGNMIServer {
 		if g.config.ServerListenAddress == "" {
@@ -205,7 +214,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		g.config.Log.Info().Msgf("Starting gNMI server on 0.0.0.0:%d.", g.config.ServerListenPort)
 		go func() {
 			stats.Registry.Counter("gnmigateway.server.started", stats.NoTags).Increment()
-			if err := g.StartGNMIServer(connMgr); err != nil {
+			if err := g.StartGNMIServer(); err != nil {
 				g.config.Log.Error().Msgf("Unable to start gNMI server: %v", err)
 				finished <- err
 			}
@@ -250,7 +259,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				finished <- err
 			}
 			stats.Registry.Counter("gnmigateway.loaders.started", stats.NoTags).Increment()
-			err = loader.WatchConfiguration(connMgr.TargetControlChan())
+			err = loader.WatchConfiguration(g.connMgr.TargetControlChan())
 			if err != nil {
 				finished <- fmt.Errorf("error during target loader %T watch: %v", loader, err)
 			}
@@ -259,12 +268,12 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 	for _, exporter := range opts.Exporters {
 		go func(exporter exporters.Exporter) {
-			err := exporter.Start(connMgr.Cache())
+			err := exporter.Start(g.connMgr.Cache())
 			if err != nil {
 				g.config.Log.Error().Msgf("Unable to start exporter %T: %v", exporter, err)
 				finished <- err
 			}
-			g.AddClient(exporter.Export)
+			g.AddClient(exporter.Export, true)
 			stats.Registry.Counter("gnmigateway.exporters.started", stats.NoTags).Increment()
 		}(exporter)
 	}
@@ -277,20 +286,28 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 func (g *Gateway) sendUpdateToClients(leaf *ctree.Leaf) {
 	for _, client := range g.clients {
-		client(leaf)
+		if client.External {
+			notification := leaf.Value().(*gnmi.Notification)
+			target := notification.GetPrefix().GetTarget()
+			if g.connMgr.HasTargetLock(target) {
+				client.Send(leaf)
+			}
+		} else {
+			client.Send(leaf)
+		}
 	}
 }
 
 // SendNotificationsToClients forwards gNMI notifications to gateway clients
 // (exporters and the gNMI cache + server) as a detached leaf to bypass
 // the cache.
-func (g *Gateway) SendNotificationToClients(n *gnmi.Notification) {
-	g.sendUpdateToClients(ctree.DetachedLeaf(n))
-}
+//func (g *Gateway) SendNotificationToClients(n *gnmi.Notification) {
+//	g.sendUpdateToClients(ctree.DetachedLeaf(n))
+//}
 
 // StartGNMIServer will start the gNMI server that serves the Subscribe
 // interface to downstream gNMI clients.
-func (g *Gateway) StartGNMIServer(connMgr connections.ConnectionManager) error {
+func (g *Gateway) StartGNMIServer() error {
 	if g.config.ServerTLSCreds == nil {
 		if g.config.ServerTLSCert == "" || g.config.ServerTLSKey == "" {
 			return fmt.Errorf("no TLS creds: you must specify a ServerTLSCert and ServerTLSKey")
@@ -309,9 +326,9 @@ func (g *Gateway) StartGNMIServer(connMgr connections.ConnectionManager) error {
 	// Initialize gNMI Proxy Subscribe server.
 	gnmiServerOpts := &server.GNMIServerOpts{
 		Config:  g.config,
-		Cache:   connMgr.Cache(),
+		Cache:   g.connMgr.Cache(),
 		Cluster: g.cluster,
-		ConnMgr: connMgr,
+		ConnMgr: g.connMgr,
 	}
 	subscribeSrv, err := server.NewServer(gnmiServerOpts)
 	if err != nil {
@@ -319,7 +336,7 @@ func (g *Gateway) StartGNMIServer(connMgr connections.ConnectionManager) error {
 	}
 	gnmi.RegisterGNMIServer(srv, subscribeSrv)
 	// Forward streaming updates to clients.
-	g.AddClient(subscribeSrv.Update)
+	g.AddClient(subscribeSrv.Update, false)
 	// Register listening port and start serving.
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", g.config.ServerListenPort))
 	if err != nil {
