@@ -78,20 +78,22 @@ type TargetState struct {
 
 	// metrics
 	metricTags           map[string]string
-	timerLatency         *spectator.Timer
 	counterNotifications *spectator.Counter
 	counterRejected      *spectator.Counter
 	counterStale         *spectator.Counter
 	counterSync          *spectator.Counter
+	gaugeSynced          *spectator.Gauge
+	timerLatency         *spectator.Timer
 }
 
 func (t *TargetState) InitializeMetrics() {
 	t.metricTags = map[string]string{"gnmigateway.client.target": t.name}
-	t.timerLatency = stats.Registry.Timer("gnmigateway.client.subscribe.latency", t.metricTags)
 	t.counterNotifications = stats.Registry.Counter("gnmigateway.client.subscribe.notifications", t.metricTags)
 	t.counterRejected = stats.Registry.Counter("gnmigateway.client.subscribe.rejected", t.metricTags)
 	t.counterStale = stats.Registry.Counter("gnmigateway.client.subscribe.stale", t.metricTags)
 	t.counterSync = stats.Registry.Counter("gnmigateway.client.subscribe.sync", t.metricTags)
+	t.gaugeSynced = stats.Registry.Gauge("gnmigateway.client.subscribe.synced", t.metricTags)
+	t.timerLatency = stats.Registry.Timer("gnmigateway.client.subscribe.latency", t.metricTags)
 }
 
 // Equal returns true if the target config is different than the target config for
@@ -325,12 +327,11 @@ func (t *TargetState) sync() {
 	t.synced = true
 	t.counterSync.Increment()
 	go func() {
-		syncMetric := stats.Registry.Gauge("gnmigateway.client.subscribe.synced", t.metricTags)
 		ticker := time.NewTicker(30 * time.Second)
 		for t.synced {
 			select {
 			case <-ticker.C:
-				syncMetric.Set(1)
+				t.gaugeSynced.Set(1)
 			}
 		}
 	}()
