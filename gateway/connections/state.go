@@ -304,9 +304,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 		}
 
 	case *gnmipb.SubscribeResponse_SyncResponse:
-		t.config.Log.Info().Msgf("Target %s: Synced", t.name)
-
-		t.counterSync.Increment()
+		t.sync()
 		switch t.queryTarget {
 		case "*":
 			// do nothing
@@ -321,8 +319,11 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 	return nil
 }
 
+// sync sets the state of the TargetState to synced.
 func (t *TargetState) sync() {
+	t.config.Log.Info().Msgf("Target %s: Synced", t.name)
 	t.synced = true
+	t.counterSync.Increment()
 	go func() {
 		syncMetric := stats.Registry.Gauge("gnmigateway.client.subscribe.synced", t.metricTags)
 		ticker := time.NewTicker(30 * time.Second)
