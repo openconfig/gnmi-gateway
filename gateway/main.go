@@ -18,6 +18,7 @@ package gateway
 import (
 	"flag"
 	"fmt"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	_ "github.com/openconfig/gnmi-gateway/gateway/exporters/all"
 	_ "github.com/openconfig/gnmi-gateway/gateway/loaders/all"
@@ -34,7 +35,11 @@ import (
 // other than that you probably don't need Main for anything.
 func Main() {
 	config := configuration.NewDefaultGatewayConfig()
-	ParseArgs(config)
+	err := ParseArgs(config)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 
 	if PrintVersion {
 		fmt.Println(fmt.Sprintf("gnmi-gateway version %s (Built %s)", Version, Buildtime))
@@ -77,13 +82,14 @@ func Main() {
 // ParseArgs will parse all of the command-line parameters and configured the associated attributes on the
 // GatewayConfig. ParseArgs calls flag.Parse before returning so if you need to add arguments you should make
 // any calls to flag before calling ParseArgs.
-func ParseArgs(config *configuration.GatewayConfig) {
+func ParseArgs(config *configuration.GatewayConfig) error {
 	// Execution parameters
 	flag.StringVar(&CPUProfile, "CPUProfile", "", "Specify the name of the file for writing CPU profiling to enable the CPU profiling")
 	flag.BoolVar(&PProf, "PProf", false, "Enable the pprof debugging web server")
 	flag.BoolVar(&PrintVersion, "version", false, "Print version and exit")
 
 	// Configuration Parameters
+	configFile := flag.String("ConfigFile", "", "Path of the gateway configuration JSON file.")
 	flag.BoolVar(&config.EnableGNMIServer, "EnableGNMIServer", false, "Enable the gNMI server")
 	exporters := flag.String("Exporters", "", "Comma-separated list of Exporters to enable.")
 	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")
@@ -108,12 +114,28 @@ func ParseArgs(config *configuration.GatewayConfig) {
 	config.Exporters.Enabled = cleanSplit(*exporters)
 	config.TargetLoaders.Enabled = cleanSplit(*targetLoaders)
 	config.ZookeeperHosts = cleanSplit(*zkHosts)
+
+	if *configFile != "" {
+		err := configuration.PopulateGatewayConfigFromFile(config, *configFile)
+		if err != nil {
+			return fmt.Errorf("failed to populate config from file: %v", err)
+		}
+	}
+
+	err := envconfig.Process("gateway", config)
+	if err != nil {
+		return fmt.Errorf("failed to read environment variable configuration: %v", err)
+	}
+	return nil
 }
 
 func cleanSplit(in string) []string {
 	var out []string
 	for _, s := range strings.Split(in, ",") {
-		out = append(out, strings.TrimSpace(s))
+		sTrimmed := strings.TrimSpace(s)
+		if sTrimmed != "" {
+			out = append(out, sTrimmed)
+		}
 	}
 	return out
 }

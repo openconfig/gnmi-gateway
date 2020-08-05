@@ -136,7 +136,8 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	g.config.Log.Info().Msg("Starting GNMI Gateway.")
 	stats.Registry.Counter("gnmigateway.starting", stats.NoTags).Increment()
 
-	if g.config.StatsSpectatorConfig != nil || g.config.StatsSpectatorURI != "" {
+	if (g.config.StatsSpectatorConfig != nil && g.config.StatsSpectatorConfig.Uri != "") ||
+		g.config.StatsSpectatorURI != "" {
 		_, err := stats.StartSpectator(g.config)
 		if err != nil {
 			return fmt.Errorf("unable to start Spectator: %v", err)

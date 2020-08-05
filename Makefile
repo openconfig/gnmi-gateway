@@ -5,7 +5,7 @@ GOLDFLAGS += -X github.com/openconfig/gnmi-gateway/gateway.Version=$(VERSION)
 GOLDFLAGS += -X github.com/openconfig/gnmi-gateway/gateway.Buildtime=$(BUILDTIME)
 GOFLAGS = -ldflags "$(GOLDFLAGS)"
 
-build: clean test
+build: clean
 	go build -o gnmi-gateway $(GOFLAGS) .
 	./gnmi-gateway -version
 
@@ -36,7 +36,7 @@ sync:
 targets:
 	cp targets-example.json targets.json
 
-test:
+test: clean
 	go test -count=1 -cover ./...
 
 tls:

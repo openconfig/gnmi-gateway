@@ -1,0 +1,15 @@
+{
+  "enable_gnmi_server": true,
+  "exporters": {
+    "enabled": []
+  },
+  "server_tls_cert": "server.crt",
+  "server_tls_key": "server.key",
+  "target_dial_timeout": 10,
+  "target_loaders": {
+    "enabled": [
+      "json"
+    ],
+    "json_file": "targets.json"
+  }
+}
