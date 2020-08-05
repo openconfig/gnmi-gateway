@@ -18,12 +18,17 @@
 package configuration
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
+	"fmt"
 	"github.com/Netflix/spectator-go"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/credentials"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -74,7 +79,7 @@ type GatewayConfig struct {
 	// gnmi-gateway metrics to Atlas.
 	StatsSpectatorURI string `json:"stats_spectator_uri"`
 	// TargetLoaders contains the configuration for the included target loaders.
-	TargetLoaders *TargetLoadersConfig
+	TargetLoaders *TargetLoadersConfig `json:"target_loaders"`
 	// TargetDialTimeout is the network transport timeout time for dialing the target connection.
 	TargetDialTimeout time.Duration `json:"target_dial_timeout"`
 	// TargetLimit is the maximum number of targets that this instance will connect to at once.
@@ -100,18 +105,18 @@ type GatewayConfig struct {
 
 type ExportersConfig struct {
 	// Enabled contains the list of named exporters that should be started.
-	Enabled []string
+	Enabled []string `json:"enabled"`
 }
 
 type TargetLoadersConfig struct {
 	// Enabled contains the list of named target loaders that should be started.
-	Enabled []string
+	Enabled []string `json:"enabled"`
 	// JSON Target Loader
 	// JSONFile is the path to a JSON file containing the configuration for gNMI targets
 	// and subscribe requests. The file will be checked for changes every TargetJSONFileReloadInterval.
-	JSONFile string ``
+	JSONFile string `json:"json_file"`
 	// JSONFileReloadInterval is the interval to check TargetJSONFile for changes.
-	JSONFileReloadInterval time.Duration
+	JSONFileReloadInterval time.Duration `json:"json_file_reload_interval"`
 }
 
 func NewDefaultGatewayConfig() *GatewayConfig {
@@ -121,4 +126,38 @@ func NewDefaultGatewayConfig() *GatewayConfig {
 		TargetLoaders: new(TargetLoadersConfig),
 	}
 	return config
+}
+
+func NewGatewayConfigFromFile(filePath string) (*GatewayConfig, error) {
+	var config GatewayConfig
+	err := PopulateGatewayConfigFromFile(&config, filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new config from file: %v", err)
+	}
+	return &config, nil
+}
+
+func PopulateGatewayConfigFromFile(config *GatewayConfig, filePath string) error {
+	path := filepath.Clean(filePath)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read file at '%s': %v", path, err)
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(config); err != nil {
+		return fmt.Errorf("failed to parse config file: %v", err)
+	}
+
+	if config.TargetDialTimeout < time.Second {
+		config.TargetDialTimeout *= time.Second
+	}
+	if config.TargetLoaders.JSONFileReloadInterval < time.Second {
+		config.TargetLoaders.JSONFileReloadInterval *= time.Second
+	}
+	if config.ZookeeperTimeout < time.Second {
+		config.ZookeeperTimeout *= time.Second
+	}
+	return nil
 }
