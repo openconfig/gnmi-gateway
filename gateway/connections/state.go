@@ -34,6 +34,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/Netflix/spectator-go"
+	"github.com/Netflix/spectator-go/histogram"
 	"github.com/golang/protobuf/proto"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/locking"
@@ -83,7 +84,7 @@ type TargetState struct {
 	counterStale         *spectator.Counter
 	counterSync          *spectator.Counter
 	gaugeSynced          *spectator.Gauge
-	timerLatency         *spectator.Timer
+	timerLatency         *histogram.PercentileTimer
 }
 
 func (t *TargetState) InitializeMetrics() {
@@ -93,7 +94,8 @@ func (t *TargetState) InitializeMetrics() {
 	t.counterStale = stats.Registry.Counter("gnmigateway.client.subscribe.stale", t.metricTags)
 	t.counterSync = stats.Registry.Counter("gnmigateway.client.subscribe.sync", t.metricTags)
 	t.gaugeSynced = stats.Registry.Gauge("gnmigateway.client.subscribe.synced", t.metricTags)
-	t.timerLatency = stats.Registry.Timer("gnmigateway.client.subscribe.latency", t.metricTags)
+	t.timerLatency = histogram.NewPercentileTimer(stats.Registry, "gnmigateway.client.subscribe.latency", t.metricTags)
+
 }
 
 // Equal returns true if the target config is different than the target config for
