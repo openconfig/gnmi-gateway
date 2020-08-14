@@ -1320,7 +1320,7 @@ func (m MockConnectionManager) Cache() *cache.Cache {
 	panic("implement me")
 }
 
-func (m MockConnectionManager) HasTargetLock(target string) bool {
+func (m MockConnectionManager) Forwardable(target string) bool {
 	panic("implement me")
 }
 

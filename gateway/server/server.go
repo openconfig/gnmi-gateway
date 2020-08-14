@@ -500,7 +500,7 @@ func (s *Server) sendStreamingResults(c *streamClient, connMgr connections.Conne
 				return
 			}
 			target := notification.GetPrefix().GetTarget()
-			if !connMgr.HasTargetLock(target) {
+			if !connMgr.Forwardable(target) {
 				// Only forward messages to cluster members if we have a local lock for the target
 				return
 			}

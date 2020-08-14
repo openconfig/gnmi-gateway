@@ -24,7 +24,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Portions of this file including TargetState and its receivers (excluding modifications) are from
+// Portions of this file including ConnectionState and its receivers (excluding modifications) are from
 // https://github.com/openconfig/gnmi/blob/89b2bf29312cda887da916d0f3a32c1624b7935f/cmd/gnmi_collector/gnmi_collector.go
 
 package connections
@@ -49,33 +49,36 @@ import (
 	"time"
 )
 
-// TargetState makes the calls to connect a target, tracks any associated connection state, and is the container for
+// ConnectionState makes the calls to connect a target, tracks any associated connection state, and is the container for
 // the target's cache data. It is created once for every device and used as a closure parameter by ProtoHandler.
-type TargetState struct {
+type ConnectionState struct {
 	ConnectionLockAcquired bool
-	config                 *configuration.GatewayConfig
 	client                 *client.ReconnectClient
-	connManager            ConnectionManager
-	// lock is the distributed lock that must be acquired before a connection is made if .connectWithLock() is called
-	lock locking.DistributedLocker
-	// The unique name of the target that is being connected to
-	name        string
-	queryTarget string
-	targetCache *cache.Target
-	target      *targetpb.Target
-	useLock     bool
-	request     *gnmipb.SubscribeRequest
+	clusterMember          bool
+	config                 *configuration.GatewayConfig
 	// connected status is set to true when the first gnmi notification is received.
 	// it gets reset to false when disconnect call back of ReconnectClient is called.
 	connected bool
 	// connecting status is used to signal that some of the connection process has been started and
 	// full reconnection is necessary if the target configuration changes
-	connecting bool
+	connecting  bool
+	connManager ConnectionManager
+	// lock is the distributed lock that must be acquired before a connection is made if .connectWithLock() is called
+	lock locking.DistributedLocker
+	// The unique name of the target that is being connected to
+	name        string
+	queryTarget string
+	request     *gnmipb.SubscribeRequest
+	// seen is the list of targets that have been seen on this connection
+	seen map[string]bool
 	// stopped status signals that .disconnect() has been called we no longer want to connect to this target so we
 	// should stop trying to connect and release any locks that are being held
 	stopped bool
 	// synced status signals that a sync message was received from the target.
-	synced bool
+	synced      bool
+	target      *targetpb.Target
+	targetCache *cache.Target
+	useLock     bool
 
 	// metrics
 	metricTags           map[string]string
@@ -87,7 +90,7 @@ type TargetState struct {
 	timerLatency         *histogram.PercentileTimer
 }
 
-func (t *TargetState) InitializeMetrics() {
+func (t *ConnectionState) InitializeMetrics() {
 	t.metricTags = map[string]string{"gnmigateway.client.target": t.name}
 	t.counterNotifications = stats.Registry.Counter("gnmigateway.client.subscribe.notifications", t.metricTags)
 	t.counterRejected = stats.Registry.Counter("gnmigateway.client.subscribe.rejected", t.metricTags)
@@ -99,8 +102,8 @@ func (t *TargetState) InitializeMetrics() {
 }
 
 // Equal returns true if the target config is different than the target config for
-// this TargetState instance.
-func (t *TargetState) Equal(other *targetpb.Target) bool {
+// this ConnectionState instance.
+func (t *ConnectionState) Equal(other *targetpb.Target) bool {
 	if len(t.target.Addresses) != len(other.Addresses) {
 		return false
 	}
@@ -125,7 +128,12 @@ func (t *TargetState) Equal(other *targetpb.Target) bool {
 	return true
 }
 
-func (t *TargetState) doConnect() {
+// Seen returns true if the named target has been seen on this connection.
+func (t *ConnectionState) Seen(target string) bool {
+	return t.seen[target]
+}
+
+func (t *ConnectionState) doConnect() {
 	t.connecting = true
 	t.config.Log.Info().Msgf("Target %s: Connecting", t.name)
 	query, err := client.NewQuery(t.request)
@@ -184,9 +192,9 @@ func (t *TargetState) doConnect() {
 	}
 }
 
-// Attempt to acquire a connection slot and connect to the target. If TargetState.disconnect() is called
+// Attempt to acquire a connection slot and connect to the target. If ConnectionState.disconnect() is called
 // all attempts and connections are aborted.
-func (t *TargetState) connect(connectionSlot *semaphore.Weighted) {
+func (t *ConnectionState) connect(connectionSlot *semaphore.Weighted) {
 	var connectionSlotAcquired = false
 	for !t.stopped {
 		if !connectionSlotAcquired {
@@ -202,9 +210,9 @@ func (t *TargetState) connect(connectionSlot *semaphore.Weighted) {
 }
 
 // Attempt to acquire a connection slot. After a connection slot is acquired attempt to grab the lock for the target.
-// After the lock for the target is acquired connect to the target. If TargetState.disconnect() is called
+// After the lock for the target is acquired connect to the target. If ConnectionState.disconnect() is called
 // all attempts and connections are aborted.
-func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted) {
+func (t *ConnectionState) connectWithLock(connectionSlot *semaphore.Weighted) {
 	var connectionSlotAcquired = false
 	for !t.stopped {
 		if !connectionSlotAcquired {
@@ -232,23 +240,24 @@ func (t *TargetState) connectWithLock(connectionSlot *semaphore.Weighted) {
 }
 
 // Disconnect from the target or stop trying to connect.
-func (t *TargetState) disconnect() error {
+func (t *ConnectionState) disconnect() error {
 	t.config.Log.Info().Msgf("Target %s: Disconnecting", t.name)
 	t.stopped = true
 	return t.client.Close() // this will disconnect and reset the cache via the disconnect callback
 }
 
 // Callback for gNMI client to signal that it has disconnected.
-func (t *TargetState) disconnected() {
+func (t *ConnectionState) disconnected() {
 	t.connected = false
 	t.synced = false
+	t.seen = map[string]bool{}
 	if t.queryTarget != "*" {
 		t.targetCache.Reset()
 	}
 	t.config.Log.Info().Msgf("Target %s: Disconnected", t.name)
 }
 
-func (t *TargetState) reconnect() error {
+func (t *ConnectionState) reconnect() error {
 	t.config.Log.Info().Msgf("Target %s: Reconnecting", t.name)
 	return t.client.Close()
 }
@@ -257,7 +266,7 @@ func (t *TargetState) reconnect() error {
 // gNMI SubscribeResponse messages. When the message is an Update, the GnmiUpdate method of the
 // cache.Target is called to generate an update. If the message is a sync_response, then targetCache is
 // marked as synchronised.
-func (t *TargetState) handleUpdate(msg proto.Message) error {
+func (t *ConnectionState) handleUpdate(msg proto.Message) error {
 	//fmt.Printf("%+v\n", msg)
 	t.counterNotifications.Increment()
 	if !t.connected {
@@ -288,6 +297,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 			if targetCache == nil {
 				targetCache = t.connManager.Cache().Add(v.Update.Prefix.Target)
 			}
+			t.seen[v.Update.Prefix.Target] = true
 			err := t.updateTargetCache(targetCache, v.Update)
 			if err != nil {
 				return err
@@ -298,7 +308,7 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 			if v.Update.GetPrefix() == nil {
 				v.Update.Prefix = &gnmipb.Path{}
 			}
-			if v.Update.Prefix.Target == "" && t.queryTarget != "*" {
+			if v.Update.Prefix.Target == "" {
 				v.Update.Prefix.Target = t.queryTarget
 			}
 			err := t.updateTargetCache(t.targetCache, v.Update)
@@ -323,8 +333,8 @@ func (t *TargetState) handleUpdate(msg proto.Message) error {
 	return nil
 }
 
-// sync sets the state of the TargetState to synced.
-func (t *TargetState) sync() {
+// sync sets the state of the ConnectionState to synced.
+func (t *ConnectionState) sync() {
 	t.config.Log.Info().Msgf("Target %s: Synced", t.name)
 	t.synced = true
 	t.counterSync.Increment()
@@ -339,7 +349,7 @@ func (t *TargetState) sync() {
 	}()
 }
 
-func (t *TargetState) updateTargetCache(cache *cache.Target, update *gnmipb.Notification) error {
+func (t *ConnectionState) updateTargetCache(cache *cache.Target, update *gnmipb.Notification) error {
 	err := cache.GnmiUpdate(update)
 	if err != nil {
 		// Some errors won't corrupt the cache so no need to return an error to the ProtoHandler caller. For these
@@ -358,7 +368,7 @@ func (t *TargetState) updateTargetCache(cache *cache.Target, update *gnmipb.Noti
 
 // rejectUpdate returns true if the gNMI notification is unwanted based on the RejectUpdates
 // configuration in GatewayConfig.
-func (t *TargetState) rejectUpdate(notification *gnmipb.Notification) bool {
+func (t *ConnectionState) rejectUpdate(notification *gnmipb.Notification) bool {
 	for _, update := range notification.GetUpdate() {
 		path := update.GetPath().GetElem()
 		for _, rejectionPath := range t.config.UpdateRejections {
