@@ -289,7 +289,7 @@ func (g *Gateway) sendUpdateToClients(leaf *ctree.Leaf) {
 		if client.External {
 			notification := leaf.Value().(*gnmi.Notification)
 			target := notification.GetPrefix().GetTarget()
-			if g.connMgr.HasTargetLock(target) {
+			if g.connMgr.Forwardable(target) {
 				client.Send(leaf)
 			}
 		} else {

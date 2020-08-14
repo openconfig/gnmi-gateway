@@ -34,8 +34,8 @@ type ZookeeperConnectionManager struct {
 	cache             *cache.Cache
 	config            *configuration.GatewayConfig
 	connLimit         *semaphore.Weighted
-	targets           map[string]*TargetState
-	targetsMutex      sync.Mutex
+	connections       map[string]*ConnectionState
+	connectionsMutex  sync.Mutex
 	targetsConfigChan chan *TargetConnectionControl
 	zkConn            *zk.Conn
 }
@@ -46,7 +46,7 @@ func NewZookeeperConnectionManagerDefault(config *configuration.GatewayConfig, z
 	mgr := ZookeeperConnectionManager{
 		config:            config,
 		connLimit:         semaphore.NewWeighted(int64(config.TargetLimit)),
-		targets:           make(map[string]*TargetState),
+		connections:       make(map[string]*ConnectionState),
 		targetsConfigChan: make(chan *TargetConnectionControl, 10),
 		zkConn:            zkConn,
 	}
@@ -62,13 +62,13 @@ func (c *ZookeeperConnectionManager) eventListener(zkEvents <-chan zk.Event) {
 			switch event.State {
 			case zk.StateDisconnected:
 				c.config.Log.Info().Msgf("Zookeeper disconnected. Resetting locked target connections.")
-				c.targetsMutex.Lock()
-				for _, targetConfig := range c.targets {
+				c.connectionsMutex.Lock()
+				for _, targetConfig := range c.connections {
 					if targetConfig.useLock {
 						_ = targetConfig.reconnect()
 					}
 				}
-				c.targetsMutex.Unlock()
+				c.connectionsMutex.Unlock()
 			}
 		}
 	}
@@ -78,14 +78,20 @@ func (c *ZookeeperConnectionManager) Cache() *cache.Cache {
 	return c.cache
 }
 
-func (c *ZookeeperConnectionManager) HasTargetLock(target string) bool {
-	c.targetsMutex.Lock()
-	targetState, exists := c.targets[target]
-	c.targetsMutex.Unlock()
-	if !exists || !targetState.ConnectionLockAcquired {
-		return false
+// Forwardable returns true if Notifications from the named target can be
+// forwarded to Exporters.
+func (c *ZookeeperConnectionManager) Forwardable(target string) bool {
+	if target == "*" || target == "" {
+		return true
 	}
-	return true
+	c.connectionsMutex.Lock()
+	defer c.connectionsMutex.Unlock()
+	for _, conn := range c.connections {
+		if !conn.clusterMember && conn.ConnectionLockAcquired && conn.Seen(target) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *ZookeeperConnectionManager) TargetControlChan() chan<- *TargetConnectionControl {
@@ -106,9 +112,9 @@ func (c *ZookeeperConnectionManager) ReloadTargets() {
 				}
 			}
 
-			c.targetsMutex.Lock()
-			newTargets := make(map[string]*TargetState)
-			for name, currentConfig := range c.targets {
+			c.connectionsMutex.Lock()
+			newConnections := make(map[string]*ConnectionState)
+			for name, currentConfig := range c.connections {
 				// Disconnect from everything we want to remove
 				if stringInSlice(name, targetControlMsg.Remove) {
 					err := currentConfig.disconnect()
@@ -122,7 +128,7 @@ func (c *ZookeeperConnectionManager) ReloadTargets() {
 					newConfig, exists := targetControlMsg.Insert.Target[name]
 					if !exists {
 						// no config for this target
-						newTargets[name] = currentConfig
+						newConnections[name] = currentConfig
 					} else {
 						if !currentConfig.Equal(newConfig) {
 							// target is different; update the current config with the old one and reconnect
@@ -135,7 +141,7 @@ func (c *ZookeeperConnectionManager) ReloadTargets() {
 								c.config.Log.Error().Err(err).Msgf("Error reconnecting connection for %s", name)
 							}
 						}
-						newTargets[name] = currentConfig
+						newConnections[name] = currentConfig
 					}
 				}
 			}
@@ -143,37 +149,40 @@ func (c *ZookeeperConnectionManager) ReloadTargets() {
 			if targetControlMsg.Insert != nil {
 				// make new connections
 				for name, newConfig := range targetControlMsg.Insert.Target {
-					if _, exists := newTargets[name]; exists {
+					if _, exists := newConnections[name]; exists {
 						continue
 					} else {
 						// no previous targetCache existed
 						c.config.Log.Info().Msgf("Initializing target %s (%v) %v.", name, newConfig.Addresses, newConfig.Meta)
 						_, noLock := newConfig.Meta["NoLock"]
-						newTargets[name] = &TargetState{
-							config:      c.config,
-							connManager: c,
-							name:        name,
-							targetCache: c.cache.Add(name),
-							target:      newConfig,
-							request:     targetControlMsg.Insert.Request[newConfig.Request],
-							useLock:     c.zkConn != nil && !noLock,
+						_, clusterMember := newConfig.Meta["ClusterMember"]
+						newConnections[name] = &ConnectionState{
+							clusterMember: clusterMember,
+							config:        c.config,
+							connManager:   c,
+							name:          name,
+							targetCache:   c.cache.Add(name),
+							target:        newConfig,
+							request:       targetControlMsg.Insert.Request[newConfig.Request],
+							seen:          make(map[string]bool),
+							useLock:       c.zkConn != nil && !noLock,
 						}
-						newTargets[name].InitializeMetrics()
-						if newTargets[name].useLock {
+						newConnections[name].InitializeMetrics()
+						if newConnections[name].useLock {
 							lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, name)
 							clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
-							newTargets[name].lock = locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll))
-							go newTargets[name].connectWithLock(c.connLimit)
+							newConnections[name].lock = locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll))
+							go newConnections[name].connectWithLock(c.connLimit)
 						} else {
-							go newTargets[name].connect(c.connLimit)
+							go newConnections[name].connect(c.connLimit)
 						}
 					}
 				}
 			}
 
 			// save the target changes
-			c.targets = newTargets
-			c.targetsMutex.Unlock()
+			c.connections = newConnections
+			c.connectionsMutex.Unlock()
 		}
 	}
 }

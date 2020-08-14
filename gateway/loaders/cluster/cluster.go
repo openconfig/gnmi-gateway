@@ -110,7 +110,8 @@ func (c ClusterTargetLoader) WatchConfiguration(configChan chan<- *connections.T
 							Credentials: nil,
 							Request:     "all",
 							Meta: map[string]string{
-								"NoLock": "yes",
+								"NoLock":        "yes",
+								"ClusterMember": "yes",
 							},
 						},
 					},

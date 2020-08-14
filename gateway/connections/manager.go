@@ -46,9 +46,9 @@ import (
 type ConnectionManager interface {
 	// Cache returns the *cache.Cache that contains gNMI Notifications.
 	Cache() *cache.Cache
-	// HasTargetLock returns true if this instance of the ConnectionManager
-	// holds the lock for the named target.
-	HasTargetLock(target string) bool
+	// Forwardable returns true if this instance of the ConnectionManager
+	// holds the lock for a non-cluster member connection for the named target.
+	Forwardable(target string) bool
 	// Start will start the loop to listen for TargetConnectionControl messages
 	// on TargetControlChan.
 	Start() error
