@@ -164,9 +164,9 @@ You can build the `gnmi-gateway` binary by running `make build`.
 
 #### Contributions
 
-Please make any changes in a separate branch from `release` (e.g. `develop` or
-your own fork) and make a PR to the `release` branch when your changes are
-ready. Tags for new release versions will be cut from the `release` branch.
+Please make any changes in a separate fork and make a PR to the `release`
+branch when your changes are ready. Tags for new release versions will be cut
+from the `release` branch.
 
 
 [1]: https://github.com/openconfig/gnmi
