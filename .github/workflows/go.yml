@@ -1,0 +1,35 @@
+name: Testing
+
+on:
+  push:
+    branches: [ release ]
+  pull_request:
+    branches: [ release ]
+
+jobs:
+  build:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.13', '1.14' ]
+    steps:
+      - name: Set up timezone
+        uses: zcong1993/setup-timezone@v1.0
+        with:
+          timezone: America/Los_Angeles
+
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+        id: go
+
+      - name: Check out code into Go module directory
+        uses: actions/checkout@v2
+
+      - name: Build
+        run: make build
+
+      - name: Test
+        run: make test
