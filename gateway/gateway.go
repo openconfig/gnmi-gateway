@@ -62,6 +62,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Netflix/spectator-go"
 	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/clustering"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
@@ -83,6 +84,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -109,8 +111,49 @@ type Gateway struct {
 }
 
 type CacheClient struct {
-	Send     func(leaf *ctree.Leaf)
-	External bool
+	buffer      chan *ctree.Leaf
+	bufferGauge *spectator.Gauge
+	name        string
+	send        func(leaf *ctree.Leaf)
+	External    bool
+}
+
+// NewCacheClient creates a new cache client instance and starts the associated
+// goroutines.
+func NewCacheClient(name string, newClient func(leaf *ctree.Leaf), external bool, size uint64) *CacheClient {
+	metricTags := map[string]string{
+		"gnmigateway.transition_buffer_name": name,
+	}
+	c := &CacheClient{
+		buffer:      make(chan *ctree.Leaf, size),
+		bufferGauge: stats.Registry.Gauge("gnmigateway.transition_buffer_size", metricTags),
+		name:        name,
+		send:        newClient,
+		External:    external,
+	}
+	go c.run()
+	go c.metrics()
+	return c
+}
+
+func (c *CacheClient) metrics() {
+	for {
+		time.Sleep(30 * time.Second)
+		c.bufferGauge.Set(float64(len(c.buffer)))
+	}
+}
+
+func (c *CacheClient) run() {
+	for {
+		select {
+		case l := <-c.buffer:
+			c.send(l)
+		}
+	}
+}
+
+func (c *CacheClient) Send(leaf *ctree.Leaf) {
+	c.buffer <- leaf
 }
 
 // StartOpts is passed to StartGateway() and is used to set the running configuration
@@ -130,13 +173,10 @@ func NewGateway(config *configuration.GatewayConfig) *Gateway {
 }
 
 // Client functions need to complete very quickly to prevent blocking upstream.
-func (g *Gateway) AddClient(newClient func(leaf *ctree.Leaf), external bool) {
+func (g *Gateway) AddClient(name string, newClient func(leaf *ctree.Leaf), external bool) {
 	g.clientLock.Lock()
 	defer g.clientLock.Unlock()
-	g.clients = append(g.clients, &CacheClient{
-		Send:     newClient,
-		External: external,
-	})
+	g.clients = append(g.clients, NewCacheClient(name, newClient, external, g.config.GatewayTransitionBufferSize))
 }
 
 // StartGateway starts up all of the loaders and exporters provided by StartOpts. This is the
@@ -273,7 +313,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 				g.config.Log.Error().Msgf("Unable to start exporter %T: %v", exporter, err)
 				finished <- err
 			}
-			g.AddClient(exporter.Export, true)
+			g.AddClient(exporter.Name(), exporter.Export, true)
 			stats.Registry.Counter("gnmigateway.exporters.started", stats.NoTags).Increment()
 		}(exporter)
 	}
@@ -336,7 +376,7 @@ func (g *Gateway) StartGNMIServer() error {
 	}
 	gnmi.RegisterGNMIServer(srv, subscribeSrv)
 	// Forward streaming updates to clients.
-	g.AddClient(subscribeSrv.Update, false)
+	g.AddClient("gnmi_server", subscribeSrv.Update, false)
 	// Register listening port and start serving.
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", g.config.ServerListenPort))
 	if err != nil {

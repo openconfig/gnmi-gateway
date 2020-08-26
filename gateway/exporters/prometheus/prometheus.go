@@ -31,8 +31,10 @@ import (
 	"strings"
 )
 
+const Name = "prometheus"
+
 func init() {
-	exporters.Register("prometheus", NewPrometheusExporter)
+	exporters.Register(Name, NewPrometheusExporter)
 }
 
 func NewPrometheusExporter(config *configuration.GatewayConfig) exporters.Exporter {
@@ -50,6 +52,10 @@ type PrometheusExporter struct {
 	deltaCalc  *DeltaCalculator
 	metrics    map[Hash]prom.Metric
 	typeLookup *openconfig.TypeLookup
+}
+
+func (e *PrometheusExporter) Name() string {
+	return Name
 }
 
 func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
