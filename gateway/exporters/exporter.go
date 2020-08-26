@@ -29,6 +29,9 @@ var Registry = make(map[string]func(config *configuration.GatewayConfig) Exporte
 
 // Exporter is an interface to send data to other systems and protocols.
 type Exporter interface {
+	// Name must return unique exporter name that will be used for registration
+	// and recording internal stats.
+	Name() string
 	// Start will be called once by the gateway.Gateway after StartGateway
 	// is called. It will receive a pointer to the cache.Cache that
 	// receives all of the updates from gNMI targets that the gateway has a
