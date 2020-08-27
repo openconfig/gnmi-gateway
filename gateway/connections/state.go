@@ -46,6 +46,7 @@ import (
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"golang.org/x/sync/semaphore"
+	"sync"
 	"time"
 )
 
@@ -70,7 +71,8 @@ type ConnectionState struct {
 	queryTarget string
 	request     *gnmipb.SubscribeRequest
 	// seen is the list of targets that have been seen on this connection
-	seen map[string]bool
+	seen      map[string]bool
+	seenMutex sync.Mutex
 	// stopped status signals that .disconnect() has been called we no longer want to connect to this target so we
 	// should stop trying to connect and release any locks that are being held
 	stopped bool
@@ -130,6 +132,8 @@ func (t *ConnectionState) Equal(other *targetpb.Target) bool {
 
 // Seen returns true if the named target has been seen on this connection.
 func (t *ConnectionState) Seen(target string) bool {
+	t.seenMutex.Lock()
+	defer t.seenMutex.Unlock()
 	return t.seen[target]
 }
 
@@ -250,7 +254,9 @@ func (t *ConnectionState) disconnect() error {
 func (t *ConnectionState) disconnected() {
 	t.connected = false
 	t.synced = false
+	t.seenMutex.Lock()
 	t.seen = map[string]bool{}
+	t.seenMutex.Unlock()
 	if t.queryTarget != "*" {
 		t.targetCache.Reset()
 	}
@@ -297,7 +303,9 @@ func (t *ConnectionState) handleUpdate(msg proto.Message) error {
 			if targetCache == nil {
 				targetCache = t.connManager.Cache().Add(v.Update.Prefix.Target)
 			}
+			t.seenMutex.Lock()
 			t.seen[v.Update.Prefix.Target] = true
+			t.seenMutex.Unlock()
 			err := t.updateTargetCache(targetCache, v.Update)
 			if err != nil {
 				return err
