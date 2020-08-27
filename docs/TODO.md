@@ -7,8 +7,7 @@ promise regarding their completion.
 - None currently
 
 ### Core Components
-- Exporter and Target Loader Registry (auto-load plugins)
-- Configuration serialization capability
+- None currently
 
 ### Target Loaders
 - Netbox
