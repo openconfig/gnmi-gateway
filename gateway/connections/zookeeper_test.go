@@ -17,6 +17,7 @@ package connections
 
 import (
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi/client"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -27,4 +28,46 @@ func TestNewZookeeperConnectionManagerDefault(t *testing.T) {
 	mgr, err := NewZookeeperConnectionManagerDefault(&configuration.GatewayConfig{}, nil, nil)
 	assertion.NoError(err)
 	assertion.NotNil(mgr)
+}
+
+func TestZookeeperConnectionManager_handleTargetControlMsg_Delete(t *testing.T) {
+	assertion := assert.New(t)
+
+	mgr, err := NewZookeeperConnectionManagerDefault(&configuration.GatewayConfig{}, nil, nil)
+	assertion.NoError(err)
+	assertion.NotNil(mgr)
+
+	// Initialize with some connections
+	mgr.connections = map[string]*ConnectionState{
+		"one":   {config: new(configuration.GatewayConfig), client: client.Reconnect(&client.BaseClient{}, nil, nil)},
+		"two":   {config: new(configuration.GatewayConfig), client: client.Reconnect(&client.BaseClient{}, nil, nil)},
+		"three": {config: new(configuration.GatewayConfig), client: client.Reconnect(&client.BaseClient{}, nil, nil)},
+	}
+
+	// Attempt to remove a single connection
+	mgr.handleTargetControlMsg(&TargetConnectionControl{Remove: []string{"two"}})
+	assertion.Len(mgr.connections, 2)
+	assertion.NotNil(mgr.connections["one"])
+	assertion.NotNil(mgr.connections["three"])
+
+	// Attempt to remove a non-existent connection
+	mgr.handleTargetControlMsg(&TargetConnectionControl{Remove: []string{"eleven"}})
+	assertion.Len(mgr.connections, 2)
+	assertion.NotNil(mgr.connections["one"])
+	assertion.NotNil(mgr.connections["three"])
+
+	// Attempt to remove a single connection
+	mgr.handleTargetControlMsg(&TargetConnectionControl{Remove: []string{"one"}})
+	assertion.Len(mgr.connections, 1)
+	assertion.NotNil(mgr.connections["three"])
+
+	// Attempt to remove a single connection
+	mgr.handleTargetControlMsg(&TargetConnectionControl{Remove: []string{"three"}})
+	assertion.Len(mgr.connections, 0)
+	assertion.Nil(mgr.connections["three"])
+
+	// Attempt to remove from empty connection map
+	mgr.handleTargetControlMsg(&TargetConnectionControl{Remove: []string{"three"}})
+	assertion.Len(mgr.connections, 0)
+	assertion.Nil(mgr.connections["three"])
 }

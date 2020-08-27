@@ -104,87 +104,77 @@ func (c *ZookeeperConnectionManager) ReloadTargets() {
 	for {
 		select {
 		case targetControlMsg := <-c.targetsConfigChan:
-			log.Info().Msgf("Connection manager received a target control message: %v inserts %v removes", targetControlMsg.InsertCount(), targetControlMsg.RemoveCount())
-
-			if targetControlMsg.Insert != nil {
-				if err := targetlib.Validate(targetControlMsg.Insert); err != nil {
-					c.config.Log.Error().Err(err).Msgf("configuration is invalid: %v", err)
-				}
-			}
-
-			c.connectionsMutex.Lock()
-			newConnections := make(map[string]*ConnectionState)
-			for name, currentConfig := range c.connections {
-				// Disconnect from everything we want to remove
-				if stringInSlice(name, targetControlMsg.Remove) {
-					err := currentConfig.disconnect()
-					if err != nil {
-						c.config.Log.Warn().Msgf("error while disconnecting from target '%s': %v", name, err)
-					}
-				}
-
-				if targetControlMsg.Insert != nil {
-					// Keep un-removed targets, check for changes in the insert list
-					newConfig, exists := targetControlMsg.Insert.Target[name]
-					if !exists {
-						// no config for this target
-						newConnections[name] = currentConfig
-					} else {
-						if !currentConfig.Equal(newConfig) {
-							// target is different; update the current config with the old one and reconnect
-							c.config.Log.Info().Msgf("Updating connection for %s.", name)
-
-							currentConfig.target = newConfig
-							currentConfig.request = targetControlMsg.Insert.Request[newConfig.Request]
-							err := currentConfig.reconnect()
-							if err != nil {
-								c.config.Log.Error().Err(err).Msgf("Error reconnecting connection for %s", name)
-							}
-						}
-						newConnections[name] = currentConfig
-					}
-				}
-			}
-
-			if targetControlMsg.Insert != nil {
-				// make new connections
-				for name, newConfig := range targetControlMsg.Insert.Target {
-					if _, exists := newConnections[name]; exists {
-						continue
-					} else {
-						// no previous targetCache existed
-						c.config.Log.Info().Msgf("Initializing target %s (%v) %v.", name, newConfig.Addresses, newConfig.Meta)
-						_, noLock := newConfig.Meta["NoLock"]
-						_, clusterMember := newConfig.Meta["ClusterMember"]
-						newConnections[name] = &ConnectionState{
-							clusterMember: clusterMember,
-							config:        c.config,
-							connManager:   c,
-							name:          name,
-							targetCache:   c.cache.Add(name),
-							target:        newConfig,
-							request:       targetControlMsg.Insert.Request[newConfig.Request],
-							seen:          make(map[string]bool),
-							useLock:       c.zkConn != nil && !noLock,
-						}
-						newConnections[name].InitializeMetrics()
-						if newConnections[name].useLock {
-							lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, name)
-							clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
-							newConnections[name].lock = locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll))
-							go newConnections[name].connectWithLock(c.connLimit)
-						} else {
-							go newConnections[name].connect(c.connLimit)
-						}
-					}
-				}
-			}
-
-			// save the target changes
-			c.connections = newConnections
-			c.connectionsMutex.Unlock()
+			c.handleTargetControlMsg(targetControlMsg)
 		}
 	}
+}
+
+func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectionControl) {
+	log.Info().Msgf("Connection manager received a target control message: %v inserts %v removes", msg.InsertCount(), msg.RemoveCount())
+
+	if msg.Insert != nil {
+		if err := targetlib.Validate(msg.Insert); err != nil {
+			c.config.Log.Error().Err(err).Msgf("configuration is invalid: %v", err)
+		}
+	}
+
+	c.connectionsMutex.Lock()
+	// Disconnect from everything we want to remove
+	for _, toRemove := range msg.Remove {
+		conn, exists := c.connections[toRemove]
+		if exists {
+			err := conn.disconnect()
+			if err != nil {
+				c.config.Log.Warn().Msgf("error while disconnecting from target '%s': %v", toRemove, err)
+			}
+			delete(c.connections, toRemove)
+		}
+	}
+
+	// Make new connections or update existing connections
+	if msg.Insert != nil {
+		for name, newConfig := range msg.Insert.Target {
+			if existingConn, exists := c.connections[name]; exists {
+				if !existingConn.Equal(newConfig) {
+					// target is different; update the current config with the old one and reconnect
+					c.config.Log.Info().Msgf("Updating connection for %s.", name)
+
+					existingConn.target = newConfig
+					existingConn.request = msg.Insert.Request[newConfig.Request]
+					err := existingConn.reconnect()
+					if err != nil {
+						c.config.Log.Error().Err(err).Msgf("Error reconnecting to target: %s", name)
+					}
+				}
+			} else {
+				// no previous targetCache existed
+				c.config.Log.Info().Msgf("Initializing target %s (%v) %v.", name, newConfig.Addresses, newConfig.Meta)
+				_, noLock := newConfig.Meta["NoLock"]
+				_, clusterMember := newConfig.Meta["ClusterMember"]
+				c.connections[name] = &ConnectionState{
+					clusterMember: clusterMember,
+					config:        c.config,
+					connManager:   c,
+					name:          name,
+					targetCache:   c.cache.Add(name),
+					target:        newConfig,
+					request:       msg.Insert.Request[newConfig.Request],
+					seen:          make(map[string]bool),
+					useLock:       c.zkConn != nil && !noLock,
+				}
+				c.connections[name].InitializeMetrics()
+				if c.connections[name].useLock {
+					lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, name)
+					clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
+					c.connections[name].lock = locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll))
+					go c.connections[name].connectWithLock(c.connLimit)
+				} else {
+					go c.connections[name].connect(c.connLimit)
+				}
+			}
+		}
+	}
+	c.connectionsMutex.Unlock()
 }
 
 func (c *ZookeeperConnectionManager) Start() error {
@@ -194,13 +184,4 @@ func (c *ZookeeperConnectionManager) Start() error {
 
 func MakeTargetLockPath(prefix string, target string) string {
 	return strings.TrimRight(prefix, "/") + "/target/" + target
-}
-
-func stringInSlice(s string, list []string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
