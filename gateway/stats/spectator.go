@@ -68,6 +68,7 @@ func StartSpectator(config *configuration.GatewayConfig) (*Spectator, error) {
 		}
 	}
 
+	spectator.CollectRuntimeMetrics(Registry)
 	err := Registry.Start()
 	if err != nil {
 		return nil, fmt.Errorf("unable to start Spectator registry: %v", err)
