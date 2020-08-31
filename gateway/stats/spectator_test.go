@@ -95,9 +95,12 @@ func TestStartSpectator(t *testing.T) {
 	assertion.NotNil(stats.Registry)
 
 	output := stats.Registry.Meters()
+	var correctMeters = 0
 	for _, meter := range output {
 		i, err := strconv.Atoi(meter.MeterId().Name())
-		assertion.NoError(err)
+		if err != nil {
+			continue
+		}
 		var expected float64
 		for j := 1; j <= 1000; j++ {
 			val := i * j * ArbitraryValue
@@ -110,5 +113,7 @@ func TestStartSpectator(t *testing.T) {
 			// Stop early so we don't get 1000 errors
 			t.FailNow()
 		}
+		correctMeters++
 	}
+	assertion.Equal(1000, correctMeters)
 }
