@@ -113,12 +113,18 @@ type ExportersConfig struct {
 type TargetLoadersConfig struct {
 	// Enabled contains the list of named target loaders that should be started.
 	Enabled []string `json:"enabled"`
-	// JSON Target Loader
-	// JSONFile is the path to a JSON file containing the configuration for gNMI targets
-	// and subscribe requests. The file will be checked for changes every TargetJSONFileReloadInterval.
+
+	// JSONFile is the path to a JSON file containing the configuration for
+	// gNMI targets and subscribe requests. The file will be checked for
+	// changes every TargetJSONFileReloadInterval.
 	JSONFile string `json:"json_file"`
 	// JSONFileReloadInterval is the interval to check TargetJSONFile for changes.
 	JSONFileReloadInterval time.Duration `json:"json_file_reload_interval"`
+
+	// SimpleFile is the path to a YAML file containing a simple target config.
+	SimpleFile string `json:"simple_file"`
+	// SimpleFileReloadInterval is the interval to check SimpleFile for changes.
+	SimpleFileReloadInterval time.Duration `json:"simple_file_reload_interval"`
 }
 
 func NewDefaultGatewayConfig() *GatewayConfig {
