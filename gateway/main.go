@@ -92,7 +92,7 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	configFile := flag.String("ConfigFile", "", "Path of the gateway configuration JSON file.")
 	flag.BoolVar(&config.EnableGNMIServer, "EnableGNMIServer", false, "Enable the gNMI server")
 	exporters := flag.String("Exporters", "", "Comma-separated list of Exporters to enable.")
-	flag.Uint64Var(&config.GatewayTransitionBufferSize, "GatewayTransitionBufferSize", 10000, "Tunes the size of the buffer between targets and exporters/clients")
+	flag.Uint64Var(&config.GatewayTransitionBufferSize, "GatewayTransitionBufferSize", 100000, "Tunes the size of the buffer between targets and exporters/clients")
 	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
 	flag.StringVar(&config.ServerAddress, "ServerAddress", "", "The IP address where other cluster members can reach the gNMI server. The first assigned IP address is used if the parameter is not provided")
