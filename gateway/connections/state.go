@@ -84,6 +84,7 @@ type ConnectionState struct {
 
 	// metrics
 	metricTags           map[string]string
+	counterCoalesced     *spectator.Counter
 	counterNotifications *spectator.Counter
 	counterRejected      *spectator.Counter
 	counterStale         *spectator.Counter
@@ -94,6 +95,7 @@ type ConnectionState struct {
 
 func (t *ConnectionState) InitializeMetrics() {
 	t.metricTags = map[string]string{"gnmigateway.client.target": t.name}
+	t.counterCoalesced = stats.Registry.Counter("gnmigateway.client.subscribe.coalesced", t.metricTags)
 	t.counterNotifications = stats.Registry.Counter("gnmigateway.client.subscribe.notifications", t.metricTags)
 	t.counterRejected = stats.Registry.Counter("gnmigateway.client.subscribe.rejected", t.metricTags)
 	t.counterStale = stats.Registry.Counter("gnmigateway.client.subscribe.stale", t.metricTags)
@@ -294,6 +296,9 @@ func (t *ConnectionState) handleUpdate(msg proto.Message) error {
 		}
 
 		if t.synced {
+			for _, u := range v.Update.Update {
+				t.counterCoalesced.Add(int64(u.Duplicates))
+			}
 			t.timerLatency.Record(time.Duration(time.Now().UnixNano() - v.Update.Timestamp))
 		}
 
