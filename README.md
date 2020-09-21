@@ -1,6 +1,7 @@
 [![Release](https://img.shields.io/github/release/openconfig/gnmi-gateway.svg)](https://github.com/openconfig/gnmi-gateway/releases/latest)
 [![Testing](https://github.com/openconfig/gnmi-gateway/workflows/Testing/badge.svg?branch=release)](https://github.com/openconfig/gnmi-gateway/actions?query=workflow%3ATesting+branch%3Arelease)
 [![Go Report Card](https://goreportcard.com/badge/github.com/openconfig/gnmi-gateway)](https://goreportcard.com/report/github.com/openconfig/gnmi-gateway)
+[![License](https://img.shields.io/github/license/openconfig/gnmi-gateway.svg)](https://github.com/openconfig/gnmi-gateway/blob/release/LICENSE)
 [![GoDoc](https://godoc.org/github.com/openconfig/gnmi-gateway/gateway?status.svg)](https://godoc.org/github.com/openconfig/gnmi-gateway/gateway)
 
 ⚠ Experimental. Please take note that this is a pre-release version.
