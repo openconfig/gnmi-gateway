@@ -110,9 +110,9 @@ to other platforms that support Golang.
 gnmi-gateway ships with an Exporter that allows you to export
 OpenConfig-modeled gNMI data to Prometheus.
 
-See the README in [examples/gnmi-prometheus/](./examples/gnmi-prometheus/)
-for details on how to start the gnmi-gateway Docker container and connect it
-to a Prometheus Docker container.
+See the [README](./examples/gnmi-prometheus/README.md) in
+`examples/gnmi-prometheus/` for details on how to start the gnmi-gateway Docker
+container and connect it to a Prometheus Docker container.
 
 
 ## Production Deployment
@@ -173,6 +173,9 @@ You can build the `gnmi-gateway` binary by running `make build`.
 Please make any changes in a separate fork and make a PR to the `release`
 branch when your changes are ready. Tags for new release versions will be cut
 from the `release` branch.
+
+You must also sign a one-time CLA for any pull requests to be accepted. See
+[CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 
 [1]: https://github.com/openconfig/gnmi
