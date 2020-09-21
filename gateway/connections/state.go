@@ -55,6 +55,7 @@ import (
 type ConnectionState struct {
 	ConnectionLockAcquired bool
 	client                 *client.ReconnectClient
+	clientCancel           context.CancelFunc
 	clusterMember          bool
 	config                 *configuration.GatewayConfig
 	// connected status is set to true when the first gnmi notification is received.
@@ -190,10 +191,11 @@ func (t *ConnectionState) doConnect() {
 		return
 	}
 
+	var ctx context.Context
+	ctx, t.clientCancel = context.WithCancel(context.Background())
 	t.config.Log.Info().Msgf("Target %s: Subscribing", t.name)
 	t.client = client.Reconnect(&client.BaseClient{}, t.disconnected, nil)
-	// Subscribe blocks until .Close() is called
-	if err := t.client.Subscribe(context.Background(), query, gnmiclient.Type); err != nil {
+	if err := t.client.Subscribe(ctx, query, gnmiclient.Type); err != nil {
 		t.config.Log.Info().Msgf("Target %s: Subscribe stopped: %v", t.name, err)
 	}
 }
@@ -267,6 +269,12 @@ func (t *ConnectionState) disconnected() {
 
 func (t *ConnectionState) reconnect() error {
 	t.config.Log.Info().Msgf("Target %s: Reconnecting", t.name)
+	return t.client.Close()
+}
+
+func (t *ConnectionState) unlock() error {
+	t.config.Log.Info().Msgf("Target %s: Unlocking", t.name)
+	t.clientCancel()
 	return t.client.Close()
 }
 

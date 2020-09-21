@@ -65,7 +65,7 @@ func (c *ZookeeperConnectionManager) eventListener(zkEvents <-chan zk.Event) {
 				c.connectionsMutex.Lock()
 				for _, targetConfig := range c.connections {
 					if targetConfig.useLock {
-						_ = targetConfig.reconnect()
+						_ = targetConfig.unlock()
 					}
 				}
 				c.connectionsMutex.Unlock()
