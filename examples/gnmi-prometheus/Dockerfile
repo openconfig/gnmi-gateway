@@ -12,9 +12,10 @@ RUN make tls
 RUN ./gnmi-gateway -version
 
 CMD ["./gnmi-gateway", \
+    "-TargetLoaders=json", \
     "-TargetJSONFile=./targets.json", \
     "-EnableGNMIServer", \
-    "-EnablePrometheusExporter", \
+    "-Exporters=prometheus", \
     "-OpenConfigDirectory=./oc-models/", \
     "-ServerTLSCert=server.crt", \
     "-ServerTLSKey=server.key"]
