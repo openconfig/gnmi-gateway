@@ -16,4 +16,5 @@
 package all
 
 import _ "github.com/openconfig/gnmi-gateway/gateway/loaders/json"
+import _ "github.com/openconfig/gnmi-gateway/gateway/loaders/netbox"
 import _ "github.com/openconfig/gnmi-gateway/gateway/loaders/simple"
