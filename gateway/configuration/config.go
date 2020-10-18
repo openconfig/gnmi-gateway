@@ -140,6 +140,30 @@ type TargetLoadersConfig struct {
 	// JSONFileReloadInterval is the interval to check TargetJSONFile for changes.
 	JSONFileReloadInterval time.Duration `json:"json_file_reload_interval"`
 
+	// NetBoxAPIKey is a valid API for the NetBox instance.
+	NetBoxAPIKey string
+	// NetBoxDeviceGNMIPort is the port on the device that the gNMI server is
+	// running on.
+	NetBoxDeviceGNMIPort int
+	// NetBoxDeviceUsername is the username of the devices to connect to.
+	// TODO (cmcintosh): replace this with NetBox secrets
+	NetBoxDeviceUsername string
+	// NetBoxDevicePossword is the passowrd of the devices to connect to.
+	// TODO (cmcintosh): replace this with NetBox secrets
+	NetBoxDevicePassword string
+	// NetBoxHost is the address and port of the NetBox server.
+	NetBoxHost string
+	// NetBoxIncludeTag is a tag to filter devices in NetBox by. If no tag is
+	// supplied all devices in NetBox with valid details are included. You
+	// probably want to set this unless all of your devices support gNMI.
+	NetBoxIncludeTag string
+	// NetBoxReloadInterval is the frequency at which to check NetBox for
+	// changes to devices.
+	NetBoxReloadInterval time.Duration
+	// NetBoxSubscribePaths is a list of XPath subscription paths for the
+	// devices in NetBox.
+	NetBoxSubscribePaths []string
+
 	// SimpleFile is the path to a YAML file containing a simple target config.
 	SimpleFile string `json:"simple_file"`
 	// SimpleFileReloadInterval is the interval to check SimpleFile for changes.

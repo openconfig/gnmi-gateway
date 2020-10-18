@@ -92,13 +92,13 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	configFile := flag.String("ConfigFile", "", "Path of the gateway configuration JSON file.")
 	flag.BoolVar(&config.EnableGNMIServer, "EnableGNMIServer", false, "Enable the gNMI server")
 	exporters := flag.String("Exporters", "", "Comma-separated list of Exporters to enable.")
-
 	flag.Int64Var(&config.Exporters.KafkaBatchBytes, "ExporterKafkaBatchBytes", 1048576, "Max bytes that will be buffered before flushing messages to a Kafka partition")
 	flag.IntVar(&config.Exporters.KafkaBatchSize, "ExporterKafkaBatchSize", 10000, "Max number of messages that will be buffered before flushing messages to a Kafka partition")
 	flag.DurationVar(&config.Exporters.KafkaBatchTimeout, "ExporterKafkaBatchTimeout", 1*time.Second, "Max seconds between flushing messages to a Kafka partition")
 	exporterKafkaBrokers := flag.String("ExporterKafkaBrokers", "", "Comma-separated list of Kafka broker addresses and ports for the Kafka Exporter to connect to")
 	flag.BoolVar(&config.Exporters.KafkaLogging, "ExporterKafkaLogging", false, "Enables info level logging from the Kafka writer. Error level logging is always enabled")
 	flag.StringVar(&config.Exporters.KafkaTopic, "ExporterKafkaTopic", "", "Kafka topic to send exported gNMI messages to.")
+
 	flag.Uint64Var(&config.GatewayTransitionBufferSize, "GatewayTransitionBufferSize", 100000, "Tunes the size of the buffer between targets and exporters/clients")
 	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
@@ -116,6 +116,14 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	flag.DurationVar(&config.TargetLoaders.JSONFileReloadInterval, "TargetJSONFileReloadInterval", 30*time.Second, "Interval to reload the JSON file containing the target configurations")
 	flag.DurationVar(&config.TargetDialTimeout, "TargetDialTimeout", 10*time.Second, "Dial timeout time")
 	flag.IntVar(&config.TargetLimit, "TargetLimit", 100, "Maximum number of targets that this instance will connect to at once")
+	flag.StringVar(&config.TargetLoaders.NetBoxAPIKey, "TargetNetBoxAPIKey", "", "API Key for NetBox target loader")
+	flag.IntVar(&config.TargetLoaders.NetBoxDeviceGNMIPort, "TargetNetBoxDeviceGNMIPort", 0, "The port that the gNMI is served from on devices loaded from NetBox ")
+	flag.StringVar(&config.TargetLoaders.NetBoxDeviceUsername, "TargetNetBoxDeviceUsername", "", "The port that the gNMI is served from on devices loaded from NetBox ")
+	flag.StringVar(&config.TargetLoaders.NetBoxDevicePassword, "TargetNetBoxDevicePassword", "", "The port that the gNMI is served from on devices loaded from NetBox ")
+	flag.StringVar(&config.TargetLoaders.NetBoxHost, "TargetNetBoxHost", "", "The address and port where the NetBox API can be reached")
+	flag.StringVar(&config.TargetLoaders.NetBoxIncludeTag, "TargetNetBoxIncludeTag", "", "A tag to filter devices loaded from NetBox")
+	flag.DurationVar(&config.TargetLoaders.NetBoxReloadInterval, "TargetNetBoxReloadInterval", 3*time.Minute, "The frequency at which to check NetBox for new or changed devices.")
+	netboxSubscribePaths := flag.String("TargetNetBoxSubscribePaths", "", "Comma separated (no spaces) list of paths to subscribe to for devices loaded from NetBox")
 	zkHosts := flag.String("ZookeeperHosts", "", "Comma separated (no spaces) list of zookeeper hosts including port")
 	flag.StringVar(&config.ZookeeperPrefix, "ZookeeperPrefix", "/gnmi/gateway/", "Prefix for the lock path in Zookeeper")
 	flag.DurationVar(&config.ZookeeperTimeout, "ZookeeperTimeout", 1*time.Second, "Zookeeper timeout time. Minimum is 1 second. Failover time is (ZookeeperTimeout * 2)")
@@ -124,6 +132,7 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	config.Exporters.Enabled = cleanSplit(*exporters)
 	config.Exporters.KafkaBrokers = cleanSplit(*exporterKafkaBrokers)
 	config.TargetLoaders.Enabled = cleanSplit(*targetLoaders)
+	config.TargetLoaders.NetBoxSubscribePaths = cleanSplit(*netboxSubscribePaths)
 	config.ZookeeperHosts = cleanSplit(*zkHosts)
 
 	if *configFile != "" {
