@@ -92,6 +92,13 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	configFile := flag.String("ConfigFile", "", "Path of the gateway configuration JSON file.")
 	flag.BoolVar(&config.EnableGNMIServer, "EnableGNMIServer", false, "Enable the gNMI server")
 	exporters := flag.String("Exporters", "", "Comma-separated list of Exporters to enable.")
+
+	flag.Int64Var(&config.Exporters.KafkaBatchBytes, "ExporterKafkaBatchBytes", 1048576, "Max bytes that will be buffered before flushing messages to a Kafka partition")
+	flag.IntVar(&config.Exporters.KafkaBatchSize, "ExporterKafkaBatchSize", 10000, "Max number of messages that will be buffered before flushing messages to a Kafka partition")
+	flag.DurationVar(&config.Exporters.KafkaBatchTimeout, "ExporterKafkaBatchTimeout", 1*time.Second, "Max seconds between flushing messages to a Kafka partition")
+	exporterKafkaBrokers := flag.String("ExporterKafkaBrokers", "", "Comma-separated list of Kafka broker addresses and ports for the Kafka Exporter to connect to")
+	flag.BoolVar(&config.Exporters.KafkaLogging, "ExporterKafkaLogging", false, "Enables info level logging from the Kafka writer. Error level logging is always enabled")
+	flag.StringVar(&config.Exporters.KafkaTopic, "ExporterKafkaTopic", "", "Kafka topic to send exported gNMI messages to.")
 	flag.Uint64Var(&config.GatewayTransitionBufferSize, "GatewayTransitionBufferSize", 100000, "Tunes the size of the buffer between targets and exporters/clients")
 	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
@@ -115,6 +122,7 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 
 	flag.Parse()
 	config.Exporters.Enabled = cleanSplit(*exporters)
+	config.Exporters.KafkaBrokers = cleanSplit(*exporterKafkaBrokers)
 	config.TargetLoaders.Enabled = cleanSplit(*targetLoaders)
 	config.ZookeeperHosts = cleanSplit(*zkHosts)
 

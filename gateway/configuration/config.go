@@ -108,6 +108,25 @@ type GatewayConfig struct {
 type ExportersConfig struct {
 	// Enabled contains the list of named exporters that should be started.
 	Enabled []string `json:"enabled"`
+
+	// KafkaBatchBytes is the max message bytes that will be buffered before
+	// flushing messages to a partition.
+	KafkaBatchBytes int64 `json:"kafka_batch_bytes"`
+	// KafkaBatchSize is the max number of messages that will be buffered before
+	// flushing messages to a partition.
+	KafkaBatchSize int `json:"kafka_batch_size"`
+	// KafkaBatchTimeout is the max amount of time that will pass before
+	// buffered messages are flushed to a partition.
+	KafkaBatchTimeout time.Duration `json:"kafka_batch_timeout"`
+	// KafkaBrokers contains the list of Kafka broker addresses and ports to
+	// connect to.
+	KafkaBrokers []string `json:"kafka_brokers"`
+	// KafkaLogging enables info level logging from the Kafka writer. Kafka
+	// error logging is always enabled.
+	KafkaLogging bool `json:"kafka_logging"`
+	// KafkaTopic is the name of the Kafka topic to send exported gNMI messages
+	// to.
+	KafkaTopic string `json:"kafka_topic"`
 }
 
 type TargetLoadersConfig struct {

@@ -87,7 +87,15 @@ func (c *ZookeeperConnectionManager) Forwardable(target string) bool {
 	c.connectionsMutex.Lock()
 	defer c.connectionsMutex.Unlock()
 	for _, conn := range c.connections {
-		if !conn.clusterMember && conn.ConnectionLockAcquired && conn.Seen(target) {
+		if conn.clusterMember {
+			continue
+		}
+
+		if conn.useLock && !conn.ConnectionLockAcquired {
+			continue
+		}
+
+		if conn.queryTarget == target || conn.Seen(target) {
 			return true
 		}
 	}

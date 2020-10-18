@@ -115,9 +115,6 @@ func (e *PrometheusExporter) Start(cache *cache.Cache) error {
 		e.config.Log.Error().Err(err).Msgf("Unable to load OpenConfig modules in %s: %v", e.config.OpenConfigDirectory, err)
 		return err
 	}
-
-	e.config.Log.Info().Msg("Starting Prometheus exporter.")
-	e.cache.SetClient(e.Export)
 	go e.runHttpServer()
 	return nil
 }
