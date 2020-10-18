@@ -31,6 +31,8 @@ import (
 
 const Name = "kafka"
 
+var _ exporters.Exporter = new(KafkaExporter)
+
 func init() {
 	exporters.Register(Name, NewKafkaExporter)
 }
