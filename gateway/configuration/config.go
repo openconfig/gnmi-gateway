@@ -38,7 +38,7 @@ import (
 type GatewayConfig struct {
 	// ClientTLSConfig are the gNMI client TLS credentials. Setting this will enable client TLS.
 	// TODO (cmcintosh): Add options to set client certificates by path (i.e. like the server TLS creds).
-	ClientTLSConfig *tls.Config
+	ClientTLSConfig *tls.Config `ignored:"true"`
 	// EnableGNMIServer will run the gNMI server (the Subscribe server). TLS options are also required
 	// for the gNMI server to be enabled.
 	EnableGNMIServer bool `json:"enable_gnmi_server"`
