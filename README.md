@@ -179,6 +179,21 @@ You must also sign a one-time CLA for any pull requests to be accepted. See
 [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 
+## Troubleshooting
+
+#### "`context deadline exceeded`" Error
+
+If you see a `context deadline exceeded` error from the connection manager it
+means there is some underlying issue that is causing the connection to a target
+to fail. This seems to often be a TLS issue (wrong certs, bad config, etc) but
+it could be something else. Try running gnmi-gateway with gRPC connection
+logging enabled. For example:
+
+```bash
+GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info ./gnmi-gateway
+```
+
+
 [1]: https://github.com/openconfig/gnmi
 [2]: https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md#35-subscribing-to-telemetry-updates
 [3]: https://zookeeper.apache.org/
