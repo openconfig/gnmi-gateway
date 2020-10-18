@@ -27,6 +27,8 @@ import (
 	"time"
 )
 
+var _ loaders.TargetLoader = new(JSONFileTargetLoader)
+
 type JSONFileTargetLoader struct {
 	config   *configuration.GatewayConfig
 	file     string

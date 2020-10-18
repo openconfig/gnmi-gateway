@@ -33,6 +33,8 @@ import (
 
 const Name = "prometheus"
 
+var _ exporters.Exporter = new(PrometheusExporter)
+
 func init() {
 	exporters.Register(Name, NewPrometheusExporter)
 }

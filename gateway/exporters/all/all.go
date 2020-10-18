@@ -15,5 +15,6 @@
 
 package all
 
+import _ "github.com/openconfig/gnmi-gateway/gateway/exporters/debug"
 import _ "github.com/openconfig/gnmi-gateway/gateway/exporters/kafka"
 import _ "github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"

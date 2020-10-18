@@ -45,6 +45,8 @@ import (
 	"time"
 )
 
+var _ loaders.TargetLoader = new(SimpleTargetLoader)
+
 type TargetConfig struct {
 	Connection map[string]ConnectionConfig `yaml:"connection"`
 	Request    map[string]RequestConfig    `yaml:"request"`
