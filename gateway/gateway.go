@@ -310,7 +310,8 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		go func(exporter exporters.Exporter) {
 			err := exporter.Start(g.connMgr.Cache())
 			if err != nil {
-				g.config.Log.Error().Msgf("Unable to start exporter %T: %v", exporter, err)
+				err = fmt.Errorf("unable to start exporter '%s': %v", exporter.Name(), err)
+				g.config.Log.Error().Msg(err.Error())
 				finished <- err
 			}
 			g.AddClient(exporter.Name(), exporter.Export, true)
