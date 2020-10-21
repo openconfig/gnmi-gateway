@@ -62,6 +62,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	_ "net/http/pprof"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/Netflix/spectator-go"
 	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/clustering"
@@ -77,14 +86,6 @@ import (
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"net"
-	_ "net/http/pprof"
-	"os"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 var (
@@ -144,11 +145,8 @@ func (c *CacheClient) metrics() {
 }
 
 func (c *CacheClient) run() {
-	for {
-		select {
-		case l := <-c.buffer:
-			c.send(l)
-		}
+	for l := range c.buffer {
+		c.send(l)
 	}
 }
 
@@ -419,24 +417,20 @@ func (g *Gateway) ConnectToZookeeper() (*zk.Conn, error) {
 
 func (g *Gateway) zookeeperEventHandler(zkEventChan <-chan zk.Event) {
 	var disconnectedCount int
-	for {
-		select {
-		case event := <-zkEventChan:
-			g.config.Log.Info().Msgf("Zookeeper State: %s", event.State.String())
-			switch event.State {
-			case zk.StateDisconnected:
-				disconnectedCount++
-				if disconnectedCount > 5 {
-					panic("too many Zookeeper disconnects")
-				}
-			case zk.StateHasSession:
-				disconnectedCount = 0
+	for event := range zkEventChan {
+		g.config.Log.Info().Msgf("Zookeeper State: %s", event.State.String())
+		switch event.State {
+		case zk.StateDisconnected:
+			disconnectedCount++
+			if disconnectedCount > 5 {
+				panic("too many Zookeeper disconnects")
 			}
-			for _, eventChan := range g.zkEventListeners {
-				eventChan <- event
-			}
+		case zk.StateHasSession:
+			disconnectedCount = 0
 		}
-
+		for _, eventChan := range g.zkEventListeners {
+			eventChan <- event
+		}
 	}
 }
 

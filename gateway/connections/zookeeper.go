@@ -16,6 +16,10 @@
 package connections
 
 import (
+	"strconv"
+	"strings"
+	"sync"
+
 	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/locking"
@@ -23,9 +27,6 @@ import (
 	targetlib "github.com/openconfig/gnmi/target"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
-	"strconv"
-	"strings"
-	"sync"
 )
 
 var _ ConnectionManager = new(ZookeeperConnectionManager)
@@ -56,20 +57,17 @@ func NewZookeeperConnectionManagerDefault(config *configuration.GatewayConfig, z
 }
 
 func (c *ZookeeperConnectionManager) eventListener(zkEvents <-chan zk.Event) {
-	for {
-		select {
-		case event := <-zkEvents:
-			switch event.State {
-			case zk.StateDisconnected:
-				c.config.Log.Info().Msgf("Zookeeper disconnected. Resetting locked target connections.")
-				c.connectionsMutex.Lock()
-				for _, targetConfig := range c.connections {
-					if targetConfig.useLock {
-						_ = targetConfig.unlock()
-					}
+	for event := range zkEvents {
+		switch event.State {
+		case zk.StateDisconnected:
+			c.config.Log.Info().Msgf("Zookeeper disconnected. Resetting locked target connections.")
+			c.connectionsMutex.Lock()
+			for _, targetConfig := range c.connections {
+				if targetConfig.useLock {
+					_ = targetConfig.unlock()
 				}
-				c.connectionsMutex.Unlock()
 			}
+			c.connectionsMutex.Unlock()
 		}
 	}
 }
@@ -109,11 +107,8 @@ func (c *ZookeeperConnectionManager) TargetControlChan() chan<- *TargetConnectio
 // ReloadTargets is a blocking loop to listen for target configurations from
 // the TargetControlChan and handles connects/reconnects and disconnects to targets.
 func (c *ZookeeperConnectionManager) ReloadTargets() {
-	for {
-		select {
-		case targetControlMsg := <-c.targetsConfigChan:
-			c.handleTargetControlMsg(targetControlMsg)
-		}
+	for targetControlMsg := range c.targetsConfigChan {
+		c.handleTargetControlMsg(targetControlMsg)
 	}
 }
 
