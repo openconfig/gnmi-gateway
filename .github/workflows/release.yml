@@ -1,0 +1,67 @@
+on:
+  release:
+    types: [published]
+
+name: Build Assets for Release Tag
+
+jobs:
+  build:
+    name: Upload Asset to Release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [ 'linux', 'freebsd', 'windows', 'darwin' ]
+        architecture: [ 'amd64' ]
+        include:
+          - platform: linux
+            architecture: arm
+          - platform: linux
+            architecture: arm64
+    steps:
+      - name: Set up timezone
+        uses: zcong1993/setup-timezone@v1.0
+        with:
+          timezone: America/Los_Angeles
+
+      - name: Set up Golang
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15
+        id: go
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Build asset
+        env:
+          GOOS: ${{ matrix.platform }}
+          GOARCH: ${{ matrix.architecture }}
+        run: make release
+
+      - name: Get release
+        id: get-release
+        uses: bruceadams/get-release@v1.2.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload zip asset
+        id: upload-release-zip-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get-release.outputs.upload_url }}
+          asset_path: ./release/gnmi-gateway-${{ steps.get-release.outputs.tag_name }}-${{ matrix.platform }}-${{ matrix.architecture }}.zip
+          asset_name: gnmi-gateway-${{ steps.get-release.outputs.tag_name }}-${{ matrix.platform }}-${{ matrix.architecture }}.zip
+          asset_content_type: application/zip
+
+      - name: Upload sha256 asset
+        id: upload-release-sha256-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get-release.outputs.upload_url }}
+          asset_path: ./release/gnmi-gateway-${{ steps.get-release.outputs.tag_name }}-${{ matrix.platform }}-${{ matrix.architecture }}.zip.sha256
+          asset_name: gnmi-gateway-${{ steps.get-release.outputs.tag_name }}-${{ matrix.platform }}-${{ matrix.architecture }}.zip.sha256
+          asset_content_type: text/plain

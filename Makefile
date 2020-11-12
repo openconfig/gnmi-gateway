@@ -5,6 +5,8 @@ GOLDFLAGS += -X github.com/openconfig/gnmi-gateway/gateway.Version=$(VERSION)
 GOLDFLAGS += -X github.com/openconfig/gnmi-gateway/gateway.Buildtime=$(BUILDTIME)
 GOFLAGS = -ldflags "$(GOLDFLAGS)"
 
+.PHONY: build release
+
 build: clean
 	go build -o gnmi-gateway $(GOFLAGS) .
 	./gnmi-gateway -version
@@ -36,6 +38,18 @@ integration:
 lint: imports
 	go fmt ./ ./gateway/...
 	go vet
+
+release:
+	mkdir -p release
+	rm -f release/gnmi-gateway release/gnmi-gateway.exe
+ifeq ($(shell go env GOOS), windows)
+	go build -o release/gnmi-gateway.exe $(GOFLAGS) .
+	cd release; zip -m "gnmi-gateway-$(shell git describe --tags --abbrev=0)-$(shell go env GOOS)-$(shell go env GOARCH).zip" gnmi-gateway.exe
+else
+	go build -o release/gnmi-gateway $(GOFLAGS) .
+	cd release; zip -m "gnmi-gateway-$(shell git describe --tags --abbrev=0)-$(shell go env GOOS)-$(shell go env GOARCH).zip" gnmi-gateway
+endif
+	cd release; sha256sum "gnmi-gateway-$(shell git describe --tags --abbrev=0)-$(shell go env GOOS)-$(shell go env GOARCH).zip" > "gnmi-gateway-$(shell git describe --tags --abbrev=0)-$(shell go env GOOS)-$(shell go env GOARCH).zip.sha256"
 
 run: build
 	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetLoaders=json -TargetJSONFile=targets.json
