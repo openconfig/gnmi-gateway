@@ -19,13 +19,15 @@ package clustering_test
 
 import (
 	"fmt"
-	"github.com/go-zookeeper/zk"
-	"github.com/openconfig/gnmi-gateway/gateway/clustering"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/go-zookeeper/zk"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/openconfig/gnmi-gateway/gateway/clustering"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 )
 
 const ZookeeperIntegrationServerAddress = "127.0.0.1:2181"

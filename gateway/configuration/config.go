@@ -22,14 +22,15 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/Netflix/spectator-go"
-	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/rs/zerolog"
-	"google.golang.org/grpc/credentials"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/Netflix/spectator-go"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/rs/zerolog"
+	"google.golang.org/grpc/credentials"
 )
 
 // GatewayConfig contains all of the configurables and tunables for various components of the gateway.

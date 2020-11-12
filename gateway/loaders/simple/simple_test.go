@@ -16,9 +16,11 @@
 package simple
 
 import (
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 )
 
 const TestData = `

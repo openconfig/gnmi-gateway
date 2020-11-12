@@ -5,10 +5,11 @@
 package exporters_test
 
 import (
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	cache "github.com/openconfig/gnmi/cache"
 	ctree "github.com/openconfig/gnmi/ctree"
-	reflect "reflect"
 )
 
 // MockExporter is a mock of Exporter interface

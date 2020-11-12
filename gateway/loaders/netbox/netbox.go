@@ -19,19 +19,21 @@ package netbox
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
+	"time"
+
 	"github.com/google/gnxi/utils/xpath"
 	"github.com/netbox-community/go-netbox/netbox"
 	"github.com/netbox-community/go-netbox/netbox/client"
 	"github.com/netbox-community/go-netbox/netbox/client/dcim"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi-gateway/gateway/connections"
-	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/target"
-	"net"
-	"strconv"
-	"time"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
+	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 )
 
 const Name = "netbox"

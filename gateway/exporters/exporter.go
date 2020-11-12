@@ -20,9 +20,10 @@ package exporters
 //go:generate mockgen -destination=exporter_mock_test.go -package=exporters_test github.com/openconfig/gnmi-gateway/gateway/exporters Exporter
 
 import (
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 )
 
 var Registry = make(map[string]func(config *configuration.GatewayConfig) Exporter)

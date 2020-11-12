@@ -16,9 +16,10 @@
 package prometheus
 
 import (
-	"github.com/cespare/xxhash/v2"
 	"sort"
 	"sync"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 func NewDeltaCalculator() *DeltaCalculator {

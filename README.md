@@ -42,7 +42,26 @@ gnmi-gateway cache, gNMI clients with relevant subscriptions, and
 Target Loaders are components that are used to generate target connection
 configurations that are sent to the connection manager. Target Loaders
 and the connection manager communicate using the [target.proto][6] model
-found in the github.com/openconfig/gnmi repository. See
+found in the github.com/openconfig/gnmi repository. gnmi-gateway accepts a few
+additional parameters in the Target.meta field:
+
+    NoTLSVerify: inlcude this field to disable TLS verification. This enables
+                 the use of self-signed certificates. Note that connections
+                 without TLS are not supported per the gNMI specification.
+    
+    NoLock: include this field to disable locking for the associated target even
+            if clustering is enabled. Only include this field if you are
+            handling de-duplication outside of gnmi-gateway.
+               
+There are a few Target Loaders included with gnmi-gateway that you can use
+right away using the `-TargetLoaders` flag from the command-line. The Target
+Loaders included are:
+
+- [json](./gateway/loaders/json/json.go)
+- [netbox](./gateway/loaders/netbox/netbox.go)
+- [simple](./gateway/loaders/simple/simple.go)
+
+If you'd like to build your own Target Loader see
 [loaders/loader.go](./gateway/loaders/loader.go) for details on how to
 implement the TargetLoader interface.
 
@@ -60,8 +79,17 @@ connections or you can run exporters on a server acting as clients to another
 gnmi-gateway cluster. This allows for some flexibility in your deployment
 design.
 
-See [exporters/exporter.go](./gateway/exporters/exporter.go) for details on
-how to implement the Exporter interface.
+Some Exporters have been included with gnmi-gateway and you can start using them
+by providing a comma-separated list of Exporters from the command-line with the
+`-Exporters` flag. The included Exporters are:
+
+- [debug](./gateway/exporters/debug/debug.go) (log to stdout)
+- [kafka](./gateway/exporters/kafka/kafka.go)
+- [prometheus](./gateway/exporters/prometheus/prometheus.go)
+
+To build a custom Exporter see
+[exporters/exporter.go](./gateway/exporters/exporter.go) for details on how to
+implement the Exporter interface.
 
 
 ## Documentation

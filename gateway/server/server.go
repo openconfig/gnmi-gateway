@@ -40,13 +40,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+	"time"
+
 	"github.com/openconfig/gnmi-gateway/gateway/clustering"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/stats"
-	"io"
-	"strings"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/openconfig/gnmi/cache"

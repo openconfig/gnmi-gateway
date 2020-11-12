@@ -1,0 +1,16 @@
+---
+connection:
+  demo-gnmi-router:
+    addresses:
+      - demo-gnmi-router.example.com:9339
+    request: demo-request
+    meta: {}
+request:
+  demo-request:
+    target: "*"
+    paths:
+      - /components
+      - /interfaces/interface[name=*]/state/counters
+      - /interfaces/interface[name=*]/ethernet/state/counters
+      - /interfaces/interface[name=*]/subinterfaces/subinterface[index=*]/state/counters
+      - /qos/interfaces/interface[interface-id=*]/output/queues/queue[name=*]/state

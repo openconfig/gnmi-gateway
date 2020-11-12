@@ -17,9 +17,11 @@ package stats
 
 import (
 	"fmt"
-	"github.com/Netflix/spectator-go"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"time"
+
+	"github.com/Netflix/spectator-go"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 )
 
 var Registry *spectator.Registry

@@ -16,9 +16,11 @@
 package locking_test
 
 import (
-	"github.com/openconfig/gnmi-gateway/gateway/locking"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/openconfig/gnmi-gateway/gateway/locking"
 )
 
 func TestNonBlockingLock_Try(t *testing.T) {

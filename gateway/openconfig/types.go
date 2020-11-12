@@ -35,11 +35,12 @@
 package openconfig
 
 import (
-	"github.com/openconfig/goyang/pkg/yang"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/openconfig/goyang/pkg/yang"
 )
 
 type TypeLookup struct {

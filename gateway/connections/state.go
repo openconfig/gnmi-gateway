@@ -33,21 +33,23 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/Netflix/spectator-go"
 	"github.com/Netflix/spectator-go/histogram"
 	"github.com/golang/protobuf/proto"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi-gateway/gateway/locking"
-	"github.com/openconfig/gnmi-gateway/gateway/stats"
-	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/client"
 	gnmiclient "github.com/openconfig/gnmi/client/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"golang.org/x/sync/semaphore"
-	"sync"
-	"time"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/locking"
+	"github.com/openconfig/gnmi-gateway/gateway/stats"
+	"github.com/openconfig/gnmi-gateway/gateway/utils"
 )
 
 // ConnectionState makes the calls to connect a target, tracks any associated connection state, and is the container for
@@ -69,6 +71,9 @@ type ConnectionState struct {
 	lock locking.DistributedLocker
 	// The unique name of the target that is being connected to
 	name        string
+	// noTLSWarning indicates if the warning about the NoTLS flag deprecation
+	// has been displayed yet.
+	noTLSWarning bool
 	queryTarget string
 	request     *gnmipb.SubscribeRequest
 	// seen is the list of targets that have been seen on this connection
@@ -159,9 +164,15 @@ func (t *ConnectionState) doConnect() {
 
 	// TODO (cmcintosh): make PR for targetpb to include TLS config and remove this
 	_, NoTLS := t.target.Meta["NoTLS"]
+	if NoTLS  && !t.noTLSWarning {
+		t.noTLSWarning = true
+		t.config.Log.Warn().Msg("DEPRECATED: The 'NoTLS' target flag has been deprecated and will be removed in a future release. Please use 'NoTLSVerify' instead.")
+	}
+
+	_, NoTLSVerify := t.target.Meta["NoTLSVerify"]
 
 	// TLS is always enabled for localTargets but we won't verify certs if no client TLS config exists.
-	if t.config.ClientTLSConfig != nil && !NoTLS {
+	if t.config.ClientTLSConfig != nil && (!NoTLS || !NoTLSVerify) {
 		query.TLS = t.config.ClientTLSConfig
 	} else {
 		query.TLS = &tls.Config{

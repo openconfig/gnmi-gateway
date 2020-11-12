@@ -2,6 +2,19 @@
 scratch.txt
 targets.json
 
+# Certificates
+server.crt
+server.key
+
+# Emitted binary and releases
+gnmi-gateway
+release/
+
+# OpenConfig models download
+oc-models/
+
+# pprof debugging web server
+cpu.pprof
 
 # GoLang-specific ignores
 # Binaries for programs and plugins
@@ -172,16 +185,3 @@ com_crashlytics_export_strings.xml
 crashlytics.properties
 crashlytics-build.properties
 fabric.properties
-
-# Certificates
-server.crt
-server.key
-
-# Emitted binary
-gnmi-gateway
-
-# OpenConfig models download
-oc-models/
-
-# pprof debugging web server
-cpu.pprof
