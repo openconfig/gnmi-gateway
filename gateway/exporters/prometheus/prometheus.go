@@ -18,17 +18,19 @@ package prometheus
 import (
 	"errors"
 	"fmt"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi-gateway/gateway/exporters"
-	"github.com/openconfig/gnmi-gateway/gateway/openconfig"
+	"net/http"
+	"strings"
+
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"net/http"
-	"strings"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/exporters"
+	"github.com/openconfig/gnmi-gateway/gateway/openconfig"
 )
 
 const Name = "prometheus"

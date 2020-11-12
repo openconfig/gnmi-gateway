@@ -17,10 +17,12 @@ package clustering
 
 import (
 	"fmt"
-	"github.com/go-zookeeper/zk"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"strings"
 	"time"
+
+	"github.com/go-zookeeper/zk"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 )
 
 const ClusterMemberPath = "/members"

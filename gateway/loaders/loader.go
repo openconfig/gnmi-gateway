@@ -18,9 +18,10 @@
 package loaders
 
 import (
+	targetpb "github.com/openconfig/gnmi/proto/target"
+
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
-	targetpb "github.com/openconfig/gnmi/proto/target"
 )
 
 var Registry = make(map[string]func(config *configuration.GatewayConfig) TargetLoader)

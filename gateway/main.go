@@ -18,10 +18,6 @@ package gateway
 import (
 	"flag"
 	"fmt"
-	"github.com/kelseyhightower/envconfig"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	_ "github.com/openconfig/gnmi-gateway/gateway/exporters/all"
-	_ "github.com/openconfig/gnmi-gateway/gateway/loaders/all"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,6 +25,12 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/kelseyhightower/envconfig"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	_ "github.com/openconfig/gnmi-gateway/gateway/exporters/all"
+	_ "github.com/openconfig/gnmi-gateway/gateway/loaders/all"
 )
 
 // Main is the entry point for the command-line and it's a good example of how to call StartGateway but

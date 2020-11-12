@@ -17,11 +17,13 @@ package cluster
 
 import (
 	"fmt"
+
+	"github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/openconfig/gnmi/proto/target"
+
 	"github.com/openconfig/gnmi-gateway/gateway/clustering"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
-	"github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/gnmi/proto/target"
 )
 
 // ClusterTargetLoader is used internally to connect/disconnect from other cluster members if clustering is enabled.

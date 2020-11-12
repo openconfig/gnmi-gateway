@@ -16,10 +16,12 @@
 package connections
 
 import (
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"testing"
+
 	"github.com/openconfig/gnmi/client"
 	"github.com/stretchr/testify/assert"
-	"testing"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 )
 
 func TestNewZookeeperConnectionManagerDefault(t *testing.T) {

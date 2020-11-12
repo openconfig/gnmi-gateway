@@ -17,13 +17,14 @@ package gateway
 
 import (
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders/json"
-	"os"
-	"time"
 )
 
 // A simple example of how to configure the gateway.

@@ -16,13 +16,15 @@
 package prometheus_test
 
 import (
-	"github.com/openconfig/gnmi-gateway/gateway/exporters"
-	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
-	prom "github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"strconv"
 	"testing"
+
+	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/openconfig/gnmi-gateway/gateway/exporters"
+	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
 )
 
 var _ exporters.Exporter = new(prometheus.PrometheusExporter)

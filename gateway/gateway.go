@@ -73,6 +73,12 @@ import (
 
 	"github.com/Netflix/spectator-go"
 	"github.com/go-zookeeper/zk"
+	"github.com/openconfig/gnmi/ctree"
+	"github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/rs/zerolog"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+
 	"github.com/openconfig/gnmi-gateway/gateway/clustering"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
@@ -81,11 +87,6 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/loaders/cluster"
 	"github.com/openconfig/gnmi-gateway/gateway/server"
 	"github.com/openconfig/gnmi-gateway/gateway/stats"
-	"github.com/openconfig/gnmi/ctree"
-	"github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/rs/zerolog"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 var (

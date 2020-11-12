@@ -17,14 +17,16 @@ package json
 
 import (
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/golang/protobuf/jsonpb"
+	targetpb "github.com/openconfig/gnmi/proto/target"
+	"github.com/openconfig/gnmi/target"
+
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders"
-	targetpb "github.com/openconfig/gnmi/proto/target"
-	"github.com/openconfig/gnmi/target"
-	"os"
-	"time"
 )
 
 var _ loaders.TargetLoader = new(JSONFileTargetLoader)

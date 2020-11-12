@@ -33,21 +33,23 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/Netflix/spectator-go"
 	"github.com/Netflix/spectator-go/histogram"
 	"github.com/golang/protobuf/proto"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi-gateway/gateway/locking"
-	"github.com/openconfig/gnmi-gateway/gateway/stats"
-	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/client"
 	gnmiclient "github.com/openconfig/gnmi/client/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"golang.org/x/sync/semaphore"
-	"sync"
-	"time"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/locking"
+	"github.com/openconfig/gnmi-gateway/gateway/stats"
+	"github.com/openconfig/gnmi-gateway/gateway/utils"
 )
 
 // ConnectionState makes the calls to connect a target, tracks any associated connection state, and is the container for

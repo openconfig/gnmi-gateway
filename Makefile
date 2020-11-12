@@ -26,9 +26,16 @@ download:
 godoc:
 	godoc -http=":6060"
 
+imports:
+	goimports -local github.com/openconfig/gnmi-gateway -w -l $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path '*.pb.go')
+
 integration:
 	echo "Integration Test Note: Make sure you have Zookeeper running on 127.0.0.1:2181 (see README)."
 	go test -tags=integration -count=1 -cover ./...
+
+lint: imports
+	go fmt ./ ./gateway/...
+	go vet
 
 run: build
 	./gnmi-gateway -EnableGNMIServer -ServerTLSCert=server.crt -ServerTLSKey=server.key -TargetLoaders=json -TargetJSONFile=targets.json

@@ -17,9 +17,10 @@ package utils
 
 import (
 	"fmt"
-	"github.com/openconfig/gnmi/proto/gnmi"
 	"sort"
 	"strings"
+
+	"github.com/openconfig/gnmi/proto/gnmi"
 )
 
 // GNMINotificationPrettyString returns a human-readable string for

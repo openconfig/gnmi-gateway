@@ -33,16 +33,18 @@ package simple
 
 import (
 	"fmt"
+	"io/ioutil"
+	"time"
+
 	"github.com/google/gnxi/utils/xpath"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi-gateway/gateway/connections"
-	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/target"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
-	"time"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
+	"github.com/openconfig/gnmi-gateway/gateway/loaders"
 )
 
 var _ loaders.TargetLoader = new(SimpleTargetLoader)

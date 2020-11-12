@@ -19,11 +19,13 @@ package locking_test
 
 import (
 	"fmt"
-	"github.com/go-zookeeper/zk"
-	"github.com/openconfig/gnmi-gateway/gateway/locking"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/go-zookeeper/zk"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/openconfig/gnmi-gateway/gateway/locking"
 )
 
 const ZookeeperIntegrationServerAddress = "127.0.0.1:2181"
