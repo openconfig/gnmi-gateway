@@ -26,7 +26,8 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 )
 
-// ClusterTargetLoader is used internally to connect/disconnect from other cluster members if clustering is enabled.
+// ClusterTargetLoader is used internally to connect/disconnect from other
+// cluster members if clustering is enabled.
 type ClusterTargetLoader struct {
 	config  *configuration.GatewayConfig
 	cluster clustering.ClusterMember

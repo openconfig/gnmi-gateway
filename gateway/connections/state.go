@@ -71,6 +71,9 @@ type ConnectionState struct {
 	lock locking.DistributedLocker
 	// The unique name of the target that is being connected to
 	name        string
+	// noTLSWarning indicates if the warning about the NoTLS flag deprecation
+	// has been displayed yet.
+	noTLSWarning bool
 	queryTarget string
 	request     *gnmipb.SubscribeRequest
 	// seen is the list of targets that have been seen on this connection
@@ -161,9 +164,15 @@ func (t *ConnectionState) doConnect() {
 
 	// TODO (cmcintosh): make PR for targetpb to include TLS config and remove this
 	_, NoTLS := t.target.Meta["NoTLS"]
+	if NoTLS  && !t.noTLSWarning {
+		t.noTLSWarning = true
+		t.config.Log.Warn().Msg("DEPRECATED: The 'NoTLS' target flag has been deprecated and will be removed in a future release. Please use 'NoTLSVerify' instead.")
+	}
+
+	_, NoTLSVerify := t.target.Meta["NoTLSVerify"]
 
 	// TLS is always enabled for localTargets but we won't verify certs if no client TLS config exists.
-	if t.config.ClientTLSConfig != nil && !NoTLS {
+	if t.config.ClientTLSConfig != nil && (!NoTLS || !NoTLSVerify) {
 		query.TLS = t.config.ClientTLSConfig
 	} else {
 		query.TLS = &tls.Config{

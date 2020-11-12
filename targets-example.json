@@ -29,7 +29,7 @@
       },
       "request": "default",
       "meta": {
-        "NoTLS": "yes"
+        "NoTLSVerify": "yes"
       }
     }
   }
