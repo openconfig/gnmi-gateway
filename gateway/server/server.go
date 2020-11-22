@@ -225,12 +225,15 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 	mode := c.sr.GetSubscribe().Mode
 
 	var clusterMember = false
+	var memberList []clustering.MemberID
 	// Check if peer is a cluster member
-	memberList, err := s.cluster.MemberList()
-	if err != nil {
-		tags["gnmigateway.server.subscribe.error_desc"] = "internal"
-		stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
-		return fmt.Errorf("unable to retrieve current cluster member list: %v", err)
+	if s.cluster != nil {
+		memberList, err = s.cluster.MemberList()
+		if err != nil {
+			tags["gnmigateway.server.subscribe.error_desc"] = "internal"
+			stats.Registry.Counter("gnmigateway.server.subscribe.error", tags).Increment()
+			return fmt.Errorf("unable to retrieve current cluster member list: %v", err)
+		}
 	}
 
 	if memberAddressInMemberList(ctxPeer.Addr.String(), memberList) {
