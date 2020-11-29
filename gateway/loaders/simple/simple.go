@@ -20,6 +20,9 @@
 //	  my-router:
 //	    addresses:
 //	      - my-router.test.example.net:9339
+//      credentials:
+//		  username: myusername
+//		  password: mypassword
 //	    request: my-request
 //	    meta: {}
 //	request:
@@ -55,14 +58,20 @@ type TargetConfig struct {
 }
 
 type ConnectionConfig struct {
-	Addresses []string          `yaml:"addresses"`
-	Request   string            `yaml:"request"`
-	Meta      map[string]string `yaml:"meta"`
+	Addresses   []string          `yaml:"addresses"`
+	Request     string            `yaml:"request"`
+	Meta        map[string]string `yaml:"meta"`
+	Credentials CredentialsConfig `yaml:"credentials"`
 }
 
 type RequestConfig struct {
 	Target string   `yaml:"target"`
 	Paths  []string `yaml:"paths"`
+}
+
+type CredentialsConfig struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type SimpleTargetLoader struct {
@@ -137,6 +146,10 @@ func (m *SimpleTargetLoader) yamlToTargets(data *[]byte) (*targetpb.Configuratio
 			Addresses: conn.Addresses,
 			Request:   conn.Request,
 			Meta:      conn.Meta,
+			Credentials: &targetpb.Credentials{
+				Username: conn.Credentials.Username,
+				Password: conn.Credentials.Password,
+			},
 		}
 	}
 	return configs, nil

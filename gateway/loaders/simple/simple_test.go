@@ -29,6 +29,9 @@ connection:
   my-router:
     addresses:
       - my-router.test.example.net:9339
+    credentials:
+      username: myusername
+      password: mypassword
     request: my-request
     meta: {}
 request:
@@ -57,4 +60,6 @@ func TestSimpleTargetLoader_yamlToTargets(t *testing.T) {
 	assertion.Len(targetConfig.Target["my-router"].GetAddresses(), 1)
 	assertion.Contains(targetConfig.Target["my-router"].GetAddresses(), "my-router.test.example.net:9339")
 	assertion.Equal("my-request", targetConfig.Target["my-router"].GetRequest())
+	assertion.Equal("myusername", targetConfig.Target["my-router"].GetCredentials().Username)
+	assertion.Equal("mypassword", targetConfig.Target["my-router"].GetCredentials().Password)
 }
