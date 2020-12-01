@@ -3,6 +3,9 @@ connection:
   demo-gnmi-router:
     addresses:
       - demo-gnmi-router.example.com:9339
+    credentials:
+      username: myusername
+      password: mypassword
     request: demo-request
     meta: {}
 request:
