@@ -1,6 +1,7 @@
 # User files
 scratch.txt
 targets.json
+targets.yaml
 
 # Certificates
 server.crt
