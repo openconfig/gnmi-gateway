@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"strconv"
 
 	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
@@ -149,7 +150,12 @@ func GetNumberValues(tv *gnmipb.TypedValue) (float64, bool) {
 	if tv != nil && tv.Value != nil {
 		switch tv.Value.(type) {
 		case *gnmipb.TypedValue_StringVal:
-			return 0, false
+			tmpval, err := strconv.ParseFloat(tv.GetStringVal(), 64)
+			if err != nil {
+				return 0, false
+			} else {
+				return tmpval, true
+			}
 		case *gnmipb.TypedValue_IntVal:
 			return float64(tv.GetIntVal()), true
 		case *gnmipb.TypedValue_UintVal:
