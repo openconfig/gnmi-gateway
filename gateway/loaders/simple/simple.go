@@ -15,28 +15,32 @@
 
 // Package simple provides a TargetLoader for parsing a simple target YAML
 // config file. Here is an example simple config:
-//	---
-//	connection:
-//	  my-router:
-//	    addresses:
-//	      - my-router.test.example.net:9339
+//  ---
+//  connection:
+//    my-router:
+//      addresses:
+//        - my-router.test.example.net:9339
 //      credentials:
-//		  username: myusername
-//		  password: mypassword
-//	    request: my-request
-//	    meta: {}
-//	request:
-//	  my-request:
-//	    target: *
-//	    paths:
-//	      - /components
-//	      - /interfaces/interface[name=*]/state/counters
-//	      - /qos/interfaces/interface[interface-id=*]/output/queues/queue[name=*]/state
+//        username: myusername
+//        password: mypassword
+//      request: my-request
+//      meta: {}
+//  request:
+//    my-request:
+//      target: *
+//      paths:
+//        - /components
+//        - /interfaces/interface[name=*]/state/counters
+//        - /qos/interfaces/interface[interface-id=*]/output/queues/queue[name=*]/state
+//
+// Paths can be further disambiguated with a gNMI Origin prefix, for example:
+//  openconfig-interfaces:/interfaces/interface[name=*]/state/counters
 package simple
 
 import (
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"time"
 
 	"github.com/google/gnxi/utils/xpath"
@@ -123,9 +127,20 @@ func (m *SimpleTargetLoader) yamlToTargets(data *[]byte) (*targetpb.Configuratio
 	for requestName, request := range simpleConfig.Request {
 		var subs []*gnmi.Subscription
 		for _, x := range request.Paths {
+
+			var origin = ""
+			split := strings.Split(x, ":")
+			if len(split) > 1 {
+				origin = split[0]
+				x = split[1]
+			}
+
 			path, err := xpath.ToGNMIPath(x)
 			if err != nil {
 				return nil, fmt.Errorf("unable to parse simple config XPath: %s: %v", x, err)
+			}
+			if origin != "" {
+				path.Origin = origin
 			}
 			subs = append(subs, &gnmi.Subscription{Path: path})
 		}

@@ -39,7 +39,7 @@ request:
     target: "*"
     paths:
       - /components
-      - /interfaces/interface[name=*]/state/counters
+      - example-origin:/interfaces/interface[name=*]/state/counters
       - /qos/interfaces/interface[interface-id=*]/output/queues/queue[name=*]/state
 `
 
@@ -56,10 +56,12 @@ func TestSimpleTargetLoader_yamlToTargets(t *testing.T) {
 	assertion.NotNil(targetConfig.Request["my-request"])
 	assertion.Equal("*", targetConfig.Request["my-request"].GetSubscribe().GetPrefix().Target)
 	assertion.Len(targetConfig.Request["my-request"].GetSubscribe().GetSubscription(), 3)
+	assertion.Equal("example-origin", targetConfig.Request["my-request"].GetSubscribe().GetSubscription()[1].Path.Origin)
 	assertion.NotNil(targetConfig.Target["my-router"])
 	assertion.Len(targetConfig.Target["my-router"].GetAddresses(), 1)
 	assertion.Contains(targetConfig.Target["my-router"].GetAddresses(), "my-router.test.example.net:9339")
 	assertion.Equal("my-request", targetConfig.Target["my-router"].GetRequest())
 	assertion.Equal("myusername", targetConfig.Target["my-router"].GetCredentials().Username)
 	assertion.Equal("mypassword", targetConfig.Target["my-router"].GetCredentials().Password)
+
 }
