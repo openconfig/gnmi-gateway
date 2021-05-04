@@ -101,9 +101,8 @@ See the [godoc pages][8] for documentation and usage examples.
 
 
 ## Pre-requisites
-- Golang 1.13 or newer
-- A target that supports gNMI Subscribe. This is usually a network router or
-  switch.
+- Golang 1.14 or newer
+- A target that supports gNMI Subscribe. This is usually a network router or switch.
 - A running instance of [Apache Zookeeper][3]. If you only want to run
   a single instance of gnmi-gateway (i.e. without failover)
   you don't need Zookeeper. See the development instructions below for how
