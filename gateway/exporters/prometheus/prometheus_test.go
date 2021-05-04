@@ -13,9 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prometheus_test
+package prometheus
 
 import (
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi/ctree"
+	pb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -24,10 +29,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
-	"github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
 )
 
-var _ exporters.Exporter = new(prometheus.PrometheusExporter)
+var _ exporters.Exporter = new(PrometheusExporter)
 
 func makeExampleLabels(seed int) prom.Labels {
 	rand.Seed(int64(seed))
@@ -45,8 +49,46 @@ func TestMapHash(t *testing.T) {
 
 	testLabels := makeExampleLabels(2906) // randomly selected consistent seed
 
-	firstHash := prometheus.NewStringMapHash("test_metric", testLabels)
+	firstHash := NewStringMapHash("test_metric", testLabels)
 	for i := 0; i < 100; i++ {
-		assertions.Equal(firstHash, prometheus.NewStringMapHash("test_metric", testLabels), "All hashes of the testLabels should be the same.")
+		assertions.Equal(firstHash, NewStringMapHash("test_metric", testLabels), "All hashes of the testLabels should be the same.")
 	}
+}
+
+func TestPrometheusExporter_Export(t *testing.T) {
+	n := &pb.Notification{
+		Prefix: &pb.Path{Target: "a", Origin: "b"},
+		Update: []*pb.Update{
+			{
+				Path: &pb.Path{
+					Elem: []*pb.PathElem{{Name: "c"}},
+				},
+				Val: &pb.TypedValue{Value: &pb.TypedValue_IntVal{IntVal: -1}},
+			},
+		},
+	}
+
+	metricName, labels := UpdateToMetricNameAndLabels(n.GetPrefix(), n.Update[0])
+	metricHash := NewStringMapHash(metricName, labels)
+
+	// Prime the delta calculator
+	calc := NewDeltaCalculator()
+	calc.Calc(metricHash, 20)
+
+	e := &PrometheusExporter{
+		config:    &configuration.GatewayConfig{},
+		cache:     cache.New(nil),
+		deltaCalc: calc,
+		metrics: map[Hash]prom.Metric{
+			metricHash: promauto.NewCounter(prom.CounterOpts{
+				Name:        metricName,
+				ConstLabels: labels,
+			}),
+		},
+		typeLookup: nil,
+	}
+	assert.NotPanics(t, func() {
+		e.Export(ctree.DetachedLeaf(n))
+	})
+
 }
