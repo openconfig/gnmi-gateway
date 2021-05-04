@@ -33,6 +33,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/openconfig/gnmi/errlist"
 	"sync"
 	"time"
 
@@ -70,12 +71,12 @@ type ConnectionState struct {
 	// lock is the distributed lock that must be acquired before a connection is made if .connectWithLock() is called
 	lock locking.DistributedLocker
 	// The unique name of the target that is being connected to
-	name        string
+	name string
 	// noTLSWarning indicates if the warning about the NoTLS flag deprecation
 	// has been displayed yet.
 	noTLSWarning bool
-	queryTarget string
-	request     *gnmipb.SubscribeRequest
+	queryTarget  string
+	request      *gnmipb.SubscribeRequest
 	// seen is the list of targets that have been seen on this connection
 	seen      map[string]bool
 	seenMutex sync.Mutex
@@ -164,7 +165,7 @@ func (t *ConnectionState) doConnect() {
 
 	// TODO (cmcintosh): make PR for targetpb to include TLS config and remove this
 	_, NoTLS := t.target.Meta["NoTLS"]
-	if NoTLS  && !t.noTLSWarning {
+	if NoTLS && !t.noTLSWarning {
 		t.noTLSWarning = true
 		t.config.Log.Warn().Msg("DEPRECATED: The 'NoTLS' target flag has been deprecated and will be removed in a future release. Please use 'NoTLSVerify' instead.")
 	}
@@ -382,20 +383,38 @@ func (t *ConnectionState) sync() {
 }
 
 func (t *ConnectionState) updateTargetCache(cache *cache.Target, update *gnmipb.Notification) error {
+	var hasError bool
 	err := cache.GnmiUpdate(update)
 	if err != nil {
 		// Some errors won't corrupt the cache so no need to return an error to the ProtoHandler caller. For these
 		// errors we just log them and move on.
-		switch err.Error() {
-		case "suppressed duplicate value":
-		case "update is stale":
-			t.counterStale.Increment()
-			//t.config.Log.Warn().Msgf("Target %s: %s: %s", t.name, err, utils.GNMINotificationPrettyString(update))
-		default:
+		errList, isList := err.(errlist.Error)
+		if isList {
+			for _, err := range errList.Errors() {
+				hasError = t.handleCacheError(err)
+				if hasError {
+					break
+				}
+			}
+		} else {
+			hasError = t.handleCacheError(err)
+		}
+		if hasError {
 			return fmt.Errorf("target '%s' cache update error: %v: %+v", t.name, err, utils.GNMINotificationPrettyString(update))
 		}
 	}
 	return nil
+}
+
+func (t *ConnectionState) handleCacheError(err error) bool {
+	switch err.Error() {
+	case "suppressed duplicate value":
+	case "update is stale":
+		t.counterStale.Increment()
+		//t.config.Log.Warn().Msgf("Target %s: %s: %s", t.name, err, utils.GNMINotificationPrettyString(update))
+		return false
+	}
+	return true
 }
 
 // rejectUpdate returns true if the gNMI notification is unwanted based on the RejectUpdates
