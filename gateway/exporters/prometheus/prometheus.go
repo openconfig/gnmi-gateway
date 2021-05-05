@@ -31,6 +31,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/openconfig"
+	"github.com/openconfig/gnmi-gateway/gateway/utils"
 )
 
 const Name = "prometheus"
@@ -65,7 +66,7 @@ func (e *PrometheusExporter) Name() string {
 func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
 	notification := leaf.Value().(*gnmipb.Notification)
 	for _, update := range notification.Update {
-		value, isNumber := GetNumberValues(update.Val)
+		value, isNumber := utils.GetNumberValues(update.Val)
 		if !isNumber {
 			continue
 		}
@@ -143,34 +144,6 @@ func (e *PrometheusExporter) runHttpServer() {
 			}
 		}
 	}
-}
-
-func GetNumberValues(tv *gnmipb.TypedValue) (float64, bool) {
-	if tv != nil && tv.Value != nil {
-		switch tv.Value.(type) {
-		case *gnmipb.TypedValue_StringVal:
-			return 0, false
-		case *gnmipb.TypedValue_IntVal:
-			return float64(tv.GetIntVal()), true
-		case *gnmipb.TypedValue_UintVal:
-			return float64(tv.GetUintVal()), true
-		case *gnmipb.TypedValue_BoolVal:
-			if tv.GetBoolVal() {
-				return 1, true
-			} else {
-				return 0, false
-			}
-		case *gnmipb.TypedValue_FloatVal:
-			return float64(tv.GetFloatVal()), true
-		case *gnmipb.TypedValue_LeaflistVal:
-			return 0, false
-		case *gnmipb.TypedValue_BytesVal:
-			return 0, false
-		default:
-			return 0, false
-		}
-	}
-	return 0, false
 }
 
 func UpdateToMetricNameAndLabels(prefix *gnmipb.Path, update *gnmipb.Update) (string, map[string]string) {

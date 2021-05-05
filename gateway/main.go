@@ -101,6 +101,12 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	flag.BoolVar(&config.Exporters.KafkaLogging, "ExporterKafkaLogging", false, "Enables info level logging from the Kafka writer. Error level logging is always enabled")
 	flag.StringVar(&config.Exporters.KafkaTopic, "ExporterKafkaTopic", "", "Kafka topic to send exported gNMI messages to.")
 
+	flag.StringVar(&config.Exporters.InfluxDBTarget, "ExportersInfluxDBTarget", "http://localhost:8086", "InfluxDB target URL (default is http://localhost:8086")
+	flag.StringVar(&config.Exporters.InfluxDBToken, "ExportersInfluxDBToken", "", "Sets the InfluxDB authentication token")
+	flag.StringVar(&config.Exporters.InfluxDBOrg, "ExportersInfluxDBOrg", "", "Sets the InfluxDB organization name")
+	flag.StringVar(&config.Exporters.InfluxDBBucket, "ExportersInfluxDBBucket", "", "Sets the InfluxDB bucket name")
+	flag.UintVar(&config.Exporters.InfluxDBBatchSize, "ExportersInfluxDBBatchSize", 20, "Sets the writer batch size for InfluxDB records (default is 20")
+
 	flag.Uint64Var(&config.GatewayTransitionBufferSize, "GatewayTransitionBufferSize", 100000, "Tunes the size of the buffer between targets and exporters/clients")
 	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
