@@ -1,0 +1,37 @@
+---
+
+version: "3"
+
+networks:
+  telemetry-net:
+
+services:
+    influxdb:
+        container_name: influxdb
+        image: influxdb:latest
+        volumes:
+            - $PWD/.influxdbv2:/root/.influxdbv2
+        ports:
+            - '8086:8086'
+            - '8083:8083'
+        networks:
+            - telemetry-net
+    gnmi-gateway:
+        container_name: gateway
+        build:
+            context: ../../
+            dockerfile: ./examples/gnmi-influxdb/Dockerfile
+        image: gnmi-gateway:latest
+        environment:
+            - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+            - INFLUXDB_ORG=${INFLUXDB_ORG}
+            - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+            - INFLUXDB_TARGET=${INFLUXDB_TARGET}
+        volumes:
+            - $PWD/targets.json:/opt/gnmi-gateway/targets.json
+        ports:
+            - '59100:59100'
+        networks:
+            - telemetry-net
+        depends_on:
+            - influxdb

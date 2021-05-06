@@ -128,6 +128,18 @@ type ExportersConfig struct {
 	// KafkaTopic is the name of the Kafka topic to send exported gNMI messages
 	// to.
 	KafkaTopic string `json:"kafka_topic"`
+
+	// InfluxDBTarget is the target URL for influx connections
+	InfluxDBTarget string `json:"influxdb_target"`
+	// InfluxDBOrg is organizaion workspace
+	InfluxDBOrg string `json:"influxdb_org"`
+	// InfluxDBBucket is the named collection for storing time series data
+	InfluxDBBucket string `json:"influxdb_bucket"`
+	// InfluxDBToken is used to authenticate the session
+	InfluxDBToken string `json:"infludb_token"`
+	// InfluxDBBatchSize the number of lines or individual data points in a
+	// line protocol batch.
+	InfluxDBBatchSize uint `json:"influxdb_batch_size"`
 }
 
 type TargetLoadersConfig struct {
