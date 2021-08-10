@@ -78,6 +78,7 @@ import (
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/reflection"
 
 	"github.com/openconfig/gnmi-gateway/gateway/clustering"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
@@ -363,6 +364,7 @@ func (g *Gateway) StartGNMIServer() error {
 
 	// Create a grpc Server.
 	srv := grpc.NewServer(grpc.Creds(g.config.ServerTLSCreds))
+	reflection.Register(srv)
 	// Initialize gNMI Proxy Subscribe server.
 	gnmiServerOpts := &server.GNMIServerOpts{
 		Config:  g.config,
