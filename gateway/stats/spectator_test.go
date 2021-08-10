@@ -17,6 +17,7 @@ package stats_test
 
 import (
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -52,7 +53,13 @@ func TestRegistry(t *testing.T) {
 
 	output := stats.Registry.Meters()
 	for _, meter := range output {
-		i, err := strconv.Atoi(meter.MeterId().Name())
+		name := meter.MeterId().Name()
+		if strings.HasPrefix(name, "spectator.") {
+			// Skip built-in measurements, only measure what we inserted
+			continue
+		}
+
+		i, err := strconv.Atoi(name)
 		assertion.NoError(err)
 		var expected float64
 		for j := 1; j <= 1000; j++ {
