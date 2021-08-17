@@ -173,7 +173,7 @@ func (t *ConnectionState) doConnect() {
 	_, NoTLSVerify := t.target.Meta["NoTLSVerify"]
 
 	// TLS is always enabled for localTargets but we won't verify certs if no client TLS config exists.
-	if t.config.ClientTLSConfig != nil && (!NoTLS || !NoTLSVerify) {
+	if t.config.ClientTLSConfig != nil && !NoTLS && !NoTLSVerify {
 		query.TLS = t.config.ClientTLSConfig
 	} else {
 		query.TLS = &tls.Config{
