@@ -206,7 +206,7 @@ func (t *ConnectionState) doConnect() {
 	var ctx context.Context
 	ctx, t.clientCancel = context.WithCancel(context.Background())
 	t.config.Log.Info().Msgf("Target %s: Subscribing", t.name)
-	t.client = client.Reconnect(&client.BaseClient{}, t.disconnected, nil)
+	t.client = client.Reconnect(&client.BaseClient{}, t.disconnected, t.reset)
 	if err := t.client.Subscribe(ctx, query, gnmiclient.Type); err != nil {
 		t.config.Log.Info().Msgf("Target %s: Subscribe stopped: %v", t.name, err)
 	}
@@ -264,6 +264,11 @@ func (t *ConnectionState) disconnect() error {
 	t.config.Log.Info().Msgf("Target %s: Disconnecting", t.name)
 	t.stopped = true
 	return t.client.Close() // this will disconnect and reset the cache via the disconnect callback
+}
+
+// reset is the callback for gNMI client to signal that it will reconnect.
+func (t *ConnectionState) reset() {
+	t.config.Log.Info().Msgf("Target %s: gNMI client will reconnect", t.name)
 }
 
 // Callback for gNMI client to signal that it has disconnected.
