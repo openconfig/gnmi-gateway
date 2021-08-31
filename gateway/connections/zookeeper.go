@@ -65,7 +65,8 @@ func (c *ZookeeperConnectionManager) eventListener(zkEvents <-chan zk.Event) {
 			c.connectionsMutex.Lock()
 			for _, targetConfig := range c.connections {
 				if targetConfig.useLock {
-					_ = targetConfig.unlock()
+					err := targetConfig.unlock()
+					c.config.Log.Error().Msgf("error while unlocking target: %v", err)
 				}
 			}
 			c.connectionsMutex.Unlock()
