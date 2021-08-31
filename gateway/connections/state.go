@@ -292,7 +292,8 @@ func (t *ConnectionState) reconnect() error {
 func (t *ConnectionState) unlock() error {
 	t.config.Log.Info().Msgf("Target %s: Unlocking", t.name)
 	t.clientCancel()
-	return t.client.Close()
+	return nil
+	//return t.client.Close()
 }
 
 // handleUpdate parses a protobuf message received from the targetCache. This implementation handles only
