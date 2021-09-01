@@ -255,6 +255,8 @@ func (t *ConnectionState) connectWithLock(connectionSlot *semaphore.Weighted) {
 				}
 				t.ConnectionLockAcquired = false
 				t.config.Log.Info().Msgf("Target %s: Lock released", t.name)
+			} else {
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}
