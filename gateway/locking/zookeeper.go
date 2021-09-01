@@ -150,11 +150,17 @@ func (l *ZookeeperNonBlockingLock) try() (bool, error) {
 
 	seq, err := parseSeq(path)
 	if err != nil {
+		if delErr := l.conn.Delete(path, -1); delErr != nil {
+			return false, fmt.Errorf("unable to remove lock path during seq parse error: %v: %v", delErr, err)
+		}
 		return false, err
 	}
 
 	lowestSeq, _, err := l.lowestSeqChild(l.id)
 	if err != nil {
+		if delErr := l.conn.Delete(path, -1); delErr != nil {
+			return false, fmt.Errorf("unable to remove lock path during lowest seq error: %v: %v", delErr, err)
+		}
 		return false, err
 	}
 

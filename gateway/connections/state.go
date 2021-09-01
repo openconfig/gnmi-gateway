@@ -240,7 +240,11 @@ func (t *ConnectionState) connectWithLock(connectionSlot *semaphore.Weighted) {
 		}
 		if connectionSlotAcquired {
 			if !t.ConnectionLockAcquired {
-				t.ConnectionLockAcquired, _ = t.lock.Try()
+				var err error
+				t.ConnectionLockAcquired, err = t.lock.Try()
+				if err != nil {
+					t.config.Log.Error().Msgf("error while trying to acquire lock: %v", err)
+				}
 			}
 			if t.ConnectionLockAcquired {
 				t.config.Log.Info().Msgf("Target %s: Lock acquired", t.name)
