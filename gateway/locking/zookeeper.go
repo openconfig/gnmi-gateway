@@ -102,7 +102,7 @@ func (l *ZookeeperNonBlockingLock) ID() string {
 }
 
 func parseSeq(path string) (int, error) {
-	parts := strings.Split(path, "-")
+	parts := strings.Split(path, ":")
 	return strconv.Atoi(parts[len(parts)-1])
 }
 
@@ -127,7 +127,7 @@ func (l *ZookeeperNonBlockingLock) try() (bool, error) {
 		return true, zk.ErrDeadlock
 	}
 
-	prefix := fmt.Sprintf("%s/lock-", l.id)
+	prefix := fmt.Sprintf("%s/lock:", l.id)
 
 	// Attempt to add a sequence to the tree
 	path, err := l.conn.CreateProtectedEphemeralSequential(prefix, []byte(l.member), l.acl)
