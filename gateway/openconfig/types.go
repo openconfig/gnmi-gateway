@@ -61,6 +61,9 @@ func getTypeByPath(entry *yang.Entry, path []string) string {
 	child, exists := entry.Dir[path[0]]
 	if exists {
 		if len(path) == 1 {
+			if child.Type == nil {
+				return ""
+			}
 			return child.Type.Name
 		}
 		return getTypeByPath(entry.Dir[path[0]], path[1:])

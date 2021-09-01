@@ -206,7 +206,7 @@ func (t *ConnectionState) doConnect() {
 	var ctx context.Context
 	ctx, t.clientCancel = context.WithCancel(context.Background())
 	t.config.Log.Info().Msgf("Target %s: Subscribing", t.name)
-	t.client = client.Reconnect(&client.BaseClient{}, t.disconnected, nil)
+	t.client = client.Reconnect(&client.BaseClient{}, t.disconnected, t.reset)
 	if err := t.client.Subscribe(ctx, query, gnmiclient.Type); err != nil {
 		t.config.Log.Info().Msgf("Target %s: Subscribe stopped: %v", t.name, err)
 	}
@@ -240,7 +240,11 @@ func (t *ConnectionState) connectWithLock(connectionSlot *semaphore.Weighted) {
 		}
 		if connectionSlotAcquired {
 			if !t.ConnectionLockAcquired {
-				t.ConnectionLockAcquired, _ = t.lock.Try()
+				var err error
+				t.ConnectionLockAcquired, err = t.lock.Try()
+				if err != nil {
+					t.config.Log.Error().Msgf("error while trying to acquire lock: %v", err)
+				}
 			}
 			if t.ConnectionLockAcquired {
 				t.config.Log.Info().Msgf("Target %s: Lock acquired", t.name)
@@ -251,6 +255,8 @@ func (t *ConnectionState) connectWithLock(connectionSlot *semaphore.Weighted) {
 				}
 				t.ConnectionLockAcquired = false
 				t.config.Log.Info().Msgf("Target %s: Lock released", t.name)
+			} else {
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}
@@ -264,6 +270,11 @@ func (t *ConnectionState) disconnect() error {
 	t.config.Log.Info().Msgf("Target %s: Disconnecting", t.name)
 	t.stopped = true
 	return t.client.Close() // this will disconnect and reset the cache via the disconnect callback
+}
+
+// reset is the callback for gNMI client to signal that it will reconnect.
+func (t *ConnectionState) reset() {
+	t.config.Log.Info().Msgf("Target %s: gNMI client will reconnect", t.name)
 }
 
 // Callback for gNMI client to signal that it has disconnected.
@@ -287,7 +298,8 @@ func (t *ConnectionState) reconnect() error {
 func (t *ConnectionState) unlock() error {
 	t.config.Log.Info().Msgf("Target %s: Unlocking", t.name)
 	t.clientCancel()
-	return t.client.Close()
+	return nil
+	//return t.client.Close()
 }
 
 // handleUpdate parses a protobuf message received from the targetCache. This implementation handles only

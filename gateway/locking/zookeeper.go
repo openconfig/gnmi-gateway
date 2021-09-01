@@ -102,7 +102,7 @@ func (l *ZookeeperNonBlockingLock) ID() string {
 }
 
 func parseSeq(path string) (int, error) {
-	parts := strings.Split(path, "-")
+	parts := strings.Split(path, ":")
 	return strconv.Atoi(parts[len(parts)-1])
 }
 
@@ -127,7 +127,7 @@ func (l *ZookeeperNonBlockingLock) try() (bool, error) {
 		return true, zk.ErrDeadlock
 	}
 
-	prefix := fmt.Sprintf("%s/lock-", l.id)
+	prefix := fmt.Sprintf("%s/lock:", l.id)
 
 	// Attempt to add a sequence to the tree
 	path, err := l.conn.CreateProtectedEphemeralSequential(prefix, []byte(l.member), l.acl)
@@ -150,11 +150,17 @@ func (l *ZookeeperNonBlockingLock) try() (bool, error) {
 
 	seq, err := parseSeq(path)
 	if err != nil {
+		if delErr := l.conn.Delete(path, -1); delErr != nil {
+			return false, fmt.Errorf("unable to remove lock path during seq parse error: %v: %v", delErr, err)
+		}
 		return false, err
 	}
 
 	lowestSeq, _, err := l.lowestSeqChild(l.id)
 	if err != nil {
+		if delErr := l.conn.Delete(path, -1); delErr != nil {
+			return false, fmt.Errorf("unable to remove lock path during lowest seq error: %v: %v", delErr, err)
+		}
 		return false, err
 	}
 
