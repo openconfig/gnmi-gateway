@@ -425,7 +425,7 @@ func (g *Gateway) zookeeperEventHandler(zkEventChan <-chan zk.Event) {
 		switch event.State {
 		case zk.StateDisconnected:
 			disconnectedCount++
-			if disconnectedCount > 5 {
+			if disconnectedCount > 50 {
 				panic("too many Zookeeper disconnects")
 			}
 		case zk.StateHasSession:

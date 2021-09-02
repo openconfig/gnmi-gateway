@@ -33,6 +33,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi/errlist"
 	"sync"
 	"time"
@@ -236,22 +237,27 @@ func (t *ConnectionState) connectWithLock(connectionSlot *semaphore.Weighted) {
 	var connectionSlotAcquired = false
 	for !t.stopped {
 		if !connectionSlotAcquired {
+			t.config.Log.Info().Msgf("Target %s: Acquiring connection slot", t.name)
 			connectionSlotAcquired = connectionSlot.TryAcquire(1)
 		}
 		if connectionSlotAcquired {
 			if !t.ConnectionLockAcquired {
+				t.config.Log.Info().Msgf("Target %s: Acquiring lock", t.name)
 				var err error
 				t.ConnectionLockAcquired, err = t.lock.Try()
 				if err != nil {
-					t.config.Log.Error().Msgf("error while trying to acquire lock: %v", err)
+					t.config.Log.Error().Msgf("Target %s: error while trying to acquire lock: %v", t.name, err)
+					time.Sleep(2 * time.Second)
 				}
 			}
 			if t.ConnectionLockAcquired {
 				t.config.Log.Info().Msgf("Target %s: Lock acquired", t.name)
 				t.doConnect()
-				err := t.lock.Unlock()
-				if err != nil {
-					t.config.Log.Warn().Err(err).Msgf("Target %s: error while releasing lock: %v", t.name, err)
+				if t.lock.LockAcquired() {
+					err := t.lock.Unlock()
+					if err != nil && err != zk.ErrNotLocked {
+						t.config.Log.Error().Msgf("Target %s: error while releasing lock: %v", t.name, err)
+					}
 				}
 				t.ConnectionLockAcquired = false
 				t.config.Log.Info().Msgf("Target %s: Lock released", t.name)
@@ -260,6 +266,7 @@ func (t *ConnectionState) connectWithLock(connectionSlot *semaphore.Weighted) {
 			}
 		}
 	}
+	t.config.Log.Info().Msgf("Target %s: Stopped", t.name)
 	if connectionSlotAcquired {
 		connectionSlot.Release(1)
 	}

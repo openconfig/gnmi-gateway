@@ -40,6 +40,10 @@ func NewNonBlockingLock(id string, member string) DistributedLocker {
 	}
 }
 
+func (l *NonBlockingLock) LockAcquired() bool {
+	return l.acquired
+}
+
 func (l *NonBlockingLock) GetMember(id string) (string, error) {
 	val, exists := registry.Load(id)
 	if exists {
