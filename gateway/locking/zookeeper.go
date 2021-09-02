@@ -46,22 +46,27 @@ package locking
 
 import (
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-zookeeper/zk"
 )
 
+var _ DistributedLocker = new(ZookeeperNonBlockingLock)
+
 type ZookeeperNonBlockingLock struct {
 	acquired bool
 	conn     *zk.Conn
 	// The member that is holding the lock. This is usually the address and port where the cluster member is reachable.
-	member   string
-	id       string
-	acl      []zk.ACL
-	lockPath string
-	seq      int
+	member      string
+	id          string
+	acl         []zk.ACL
+	lockPath    string
+	seq         int
+	unlockMutex sync.Mutex
 }
 
 // NewZookeeperNonBlockingLock creates a new lock instance using the provided connection, path, and acl.
@@ -75,6 +80,10 @@ func NewZookeeperNonBlockingLock(conn *zk.Conn, id string, member string, acl []
 		id:     trimmedID,
 		acl:    acl,
 	}
+}
+
+func (l *ZookeeperNonBlockingLock) LockAcquired() bool {
+	return l.acquired
 }
 
 func GetMember(conn *zk.Conn, id string) (string, error) {
@@ -229,13 +238,16 @@ func (l *ZookeeperNonBlockingLock) lowestSeqChild(path string) (int, string, err
 
 func (l *ZookeeperNonBlockingLock) watchState() {
 	currentState := l.conn.State()
-	for l.acquired && (currentState == zk.StateConnected || currentState == zk.StateHasSession) {
+	for l.LockAcquired() && (currentState == zk.StateConnected || currentState == zk.StateHasSession) {
 		time.Sleep(500 * time.Millisecond)
 		currentState = l.conn.State()
 	}
-	// disconnected
-	if l.acquired {
-		l.released()
+	// zk is disconnected
+	if l.LockAcquired() {
+		err := l.Unlock()
+		if err != nil {
+			log.Error().Msgf("watchState: unable to unlock zookeeper lock: %v", err)
+		}
 	}
 }
 
@@ -243,19 +255,19 @@ func (l *ZookeeperNonBlockingLock) watchState() {
 // this Lock instance than ErrNotLocked is returned.
 // This should only be called if we're still connected.
 func (l *ZookeeperNonBlockingLock) Unlock() error {
+	l.unlockMutex.Lock()
+	defer l.unlockMutex.Unlock()
 	if l.lockPath == "" {
 		return zk.ErrNotLocked
 	}
 	if err := l.conn.Delete(l.lockPath, -1); err != nil {
 		return fmt.Errorf("unable to release lock gracefully: %s", err)
 	}
-	l.released()
-	//log.Info().Msg("Cluster lock released.")
-	return nil
-}
 
-func (l *ZookeeperNonBlockingLock) released() {
+	// reset the lock internals
 	l.lockPath = ""
 	l.seq = 0
 	l.acquired = false
+	log.Info().Msg("Cluster lock released.")
+	return nil
 }
