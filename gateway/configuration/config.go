@@ -104,6 +104,9 @@ type GatewayConfig struct {
 	// Minimum ZookeeperTimeout is ('your Zookeeper server tickTime' * 2).
 	// Failover of targets will take (ZookeeperTimeout * 2) time.
 	ZookeeperTimeout time.Duration `json:"zookeeper_timeout"`
+	// EnableClustering will dictate if you want clustering turned on
+	// or just having zookeeper hosts for target loading
+	EnableClustering bool `json:"enable_clustering"`
 }
 
 type ExportersConfig struct {
@@ -181,6 +184,8 @@ type TargetLoadersConfig struct {
 	SimpleFile string `json:"simple_file"`
 	// SimpleFileReloadInterval is the interval to check SimpleFile for changes.
 	SimpleFileReloadInterval time.Duration `json:"simple_file_reload_interval"`
+
+	ZookeeperReloadInterval time.Duration `json:"zookeeper_reload_interval"`
 }
 
 func NewDefaultGatewayConfig() *GatewayConfig {

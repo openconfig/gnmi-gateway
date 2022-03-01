@@ -199,7 +199,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 	var err error
 	var clusterMember string
-	if g.config.ZookeeperHosts != nil && len(g.config.ZookeeperHosts) > 0 {
+	if (g.config.EnableClustering == true) && (g.config.ZookeeperHosts != nil && len(g.config.ZookeeperHosts) > 0) {
 		if !g.config.EnableGNMIServer {
 			return errors.New("gNMI server is required for clustering: Set -EnableGNMIServer or disable clustering by removing -ZookeeperHosts")
 		}
@@ -295,6 +295,11 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 		go func(loader loaders.TargetLoader) {
 			err := loader.Start()
 			if err != nil {
+				for err == zk.ErrNoServer {
+					g.config.Log.Error().Msgf("Zookeeper couldn't connect: %v ; Retrying...", err)
+					time.Sleep(10 * time.Second)
+					err = loader.Start()
+				}
 				g.config.Log.Error().Msgf("Unable to start target loader %T: %v", loader, err)
 				finished <- err
 			}

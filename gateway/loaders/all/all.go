@@ -19,4 +19,5 @@ import (
 	_ "github.com/openconfig/gnmi-gateway/gateway/loaders/json"
 	_ "github.com/openconfig/gnmi-gateway/gateway/loaders/netbox"
 	_ "github.com/openconfig/gnmi-gateway/gateway/loaders/simple"
+	_ "github.com/openconfig/gnmi-gateway/gateway/loaders/zookeeper"
 )

@@ -131,11 +131,12 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	flag.StringVar(&config.TargetLoaders.NetBoxHost, "TargetNetBoxHost", "", "The address and port where the NetBox API can be reached")
 	flag.StringVar(&config.TargetLoaders.NetBoxIncludeTag, "TargetNetBoxIncludeTag", "", "A tag to filter devices loaded from NetBox")
 	flag.DurationVar(&config.TargetLoaders.NetBoxReloadInterval, "TargetNetBoxReloadInterval", 3*time.Minute, "The frequency at which to check NetBox for new or changed devices.")
+	flag.DurationVar(&config.TargetLoaders.ZookeeperReloadInterval, "ZookeeperReloadInterval", 3*time.Minute, "The frequency at which to check Zookeeper for new or changed devices.")
 	netboxSubscribePaths := flag.String("TargetNetBoxSubscribePaths", "", "Comma separated (no spaces) list of paths to subscribe to for devices loaded from NetBox")
 	zkHosts := flag.String("ZookeeperHosts", "", "Comma separated (no spaces) list of zookeeper hosts including port")
 	flag.StringVar(&config.ZookeeperPrefix, "ZookeeperPrefix", "/gnmi/gateway/", "Prefix for the lock path in Zookeeper")
 	flag.DurationVar(&config.ZookeeperTimeout, "ZookeeperTimeout", 1*time.Second, "Zookeeper timeout time. Minimum is 1 second. Failover time is (ZookeeperTimeout * 2)")
-
+	flag.BoolVar(&config.EnableClustering, "EnableClustering", true, "Flag to check if clustering should be enabled or not")
 	flag.Parse()
 	config.Exporters.Enabled = cleanSplit(*exporters)
 	config.Exporters.KafkaBrokers = cleanSplit(*exporterKafkaBrokers)
