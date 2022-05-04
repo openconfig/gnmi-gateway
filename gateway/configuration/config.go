@@ -143,6 +143,10 @@ type ExportersConfig struct {
 	// InfluxDBBatchSize the number of lines or individual data points in a
 	// line protocol batch.
 	InfluxDBBatchSize uint `json:"influxdb_batch_size"`
+	// StatsdHost is the host for statsd connections
+	StatsdHost string `json:"statsd_target"`
+	// StatsdPort is the target port for statsd connections
+	StatsdPort int `json:"statsd_port"`
 }
 
 type TargetLoadersConfig struct {

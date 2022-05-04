@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/Netflix/spectator-go v0.1.3
 	github.com/cespare/xxhash/v2 v2.1.1
+	github.com/etsy/statsd v0.9.0
 	github.com/frankban/quicktest v1.11.1 // indirect
 	github.com/go-zookeeper/zk v1.0.2
 	github.com/golang/mock v1.5.0

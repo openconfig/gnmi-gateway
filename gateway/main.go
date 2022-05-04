@@ -137,6 +137,8 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	flag.StringVar(&config.ZookeeperPrefix, "ZookeeperPrefix", "/gnmi/gateway/", "Prefix for the lock path in Zookeeper")
 	flag.DurationVar(&config.ZookeeperTimeout, "ZookeeperTimeout", 1*time.Second, "Zookeeper timeout time. Minimum is 1 second. Failover time is (ZookeeperTimeout * 2)")
 	flag.BoolVar(&config.EnableClustering, "EnableClustering", true, "Flag to check if clustering should be enabled or not")
+	flag.StringVar(&config.Exporters.StatsdHost, "ExportersStatsdHost", "", "Statsd host address")
+	flag.IntVar(&config.Exporters.StatsdPort, "ExportersStatsdPort", 8125, "Statsd port")
 	flag.Parse()
 	config.Exporters.Enabled = cleanSplit(*exporters)
 	config.Exporters.KafkaBrokers = cleanSplit(*exporterKafkaBrokers)
