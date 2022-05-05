@@ -136,56 +136,26 @@ func GetNumberValues(tv *gnmi.TypedValue) (float64, bool) {
 	return 0, false
 }
 
-func GNMINotificationGenevaString(notification *gnmi.Notification, accountName string, namespace string, armID string) []string {
-	if notification == nil {
-		return nil
-	}
-
-	metrics := []string{}
-
-	// not functional, just a prototype
+func GetDataAsMaps(notification *gnmi.Notification) []map[string]string {
+	result := make([]map[string]string, 0)
 	if len(notification.Update) > 0 {
-		metric := "{"
-		for _, u := range notification.Update {
-			metric += fmt.Sprintf("Account:%s", accountName)
-			metric += fmt.Sprintf("Namespace:%s", namespace)
-			for _, elem := range u.Path.Elem {
-				metric += fmt.Sprintf("Metric:%s", elem.Key["name"])
-				metric += fmt.Sprintf("microsoft.resourceid:%s", armID)
-				metric += fmt.Sprintf(":%g", u.Val.GetValue())
+		updates := notification.Update
+		for _, update := range updates {
+			data := make(map[string]string)
+
+			data["timestamp"] = fmt.Sprint(notification.Timestamp)
+			data["prefix"] = PathToXPath(notification.Prefix)
+			if notification.Alias != "" {
+				data["alias"] = notification.Alias
 			}
-
+			if update != nil {
+				data["path"] = PathToXPath(update.Path)
+				stringVal := fmt.Sprintf("%v", update.Val.GetValue())
+				// TODO: Check for behavioural differences between data types
+				data["value"] = strings.Trim(stringVal, "&{}")
+			}
+			result = append(result, data)
 		}
-		metric += "}"
 	}
-
-	//result += fmt.Sprintf("Metric:%s", notification.)
-	return metrics
-
-	// pretty := "{ "
-	// pretty += fmt.Sprintf("timestamp:%d ", notification.Timestamp)
-	// pretty += fmt.Sprintf("prefix:%s ", PathToXPath(notification.Prefix))
-	// if notification.Alias != "" {
-	// 	pretty += fmt.Sprintf("alias:%v ", notification.Alias)
-	// }
-	// if len(notification.Update) > 0 {
-	// 	pretty += "update:[ "
-	// 	for _, u := range notification.Update {
-	// 		pretty += GNMIUpdatePrettyString(u) + " "
-	// 	}
-	// 	pretty += "] "
-	// }
-	// if len(notification.Delete) > 0 {
-	// 	pretty += "delete:[ "
-	// 	for _, d := range notification.Delete {
-	// 		pretty += PathToXPath(d) + " "
-	// 	}
-	// 	pretty += "] "
-	// }
-	// if notification.Atomic {
-	// 	pretty += "atomic:true "
-	// }
-
-	// pretty += "}"
-	// return pretty
+	return result
 }

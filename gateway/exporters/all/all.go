@@ -20,4 +20,5 @@ import (
 	_ "github.com/openconfig/gnmi-gateway/gateway/exporters/influxdb"
 	_ "github.com/openconfig/gnmi-gateway/gateway/exporters/kafka"
 	_ "github.com/openconfig/gnmi-gateway/gateway/exporters/prometheus"
+	_ "github.com/openconfig/gnmi-gateway/gateway/exporters/statsd"
 )

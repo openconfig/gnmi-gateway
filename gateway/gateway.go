@@ -284,6 +284,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 	}
 
 	for _, name := range g.config.Exporters.Enabled {
+		g.config.Log.Info().Msg("Exporter: " + name)
 		exporter := exporters.New(name, g.config)
 		if exporter == nil {
 			return fmt.Errorf("no registered exporter: '%s'", name)

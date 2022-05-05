@@ -147,6 +147,14 @@ type ExportersConfig struct {
 	StatsdHost string `json:"statsd_target"`
 	// StatsdPort is the target port for statsd connections
 	StatsdPort int `json:"statsd_port"`
+	// Enable Geneva format for statsd exporter
+	EnableGenevaFormat bool `json:"enable_geneva_format"`
+	// Geneva Account
+	GenevaAccount string `json:"geneva_account"`
+	// Geneva Namespace
+	GenevaNamespace string `json:"geneva_namespace"`
+	// Geneva Metric
+	GenevaMetric string `json:"geneva_metric"`
 }
 
 type TargetLoadersConfig struct {
