@@ -143,6 +143,11 @@ type ExportersConfig struct {
 	// InfluxDBBatchSize the number of lines or individual data points in a
 	// line protocol batch.
 	InfluxDBBatchSize uint `json:"influxdb_batch_size"`
+
+	AzureMetricEndpoint string `json:"azure_metric_endpoint"`
+	AzureTokenEndpoint  string `json:"azure_token_endpoint"`
+	AzureClientID       string `json:"azure_client_id"`
+	AzureClientSecret   string `json:"azure_client_secret"`
 }
 
 type TargetLoadersConfig struct {
