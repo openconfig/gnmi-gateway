@@ -20,10 +20,10 @@ package exporters
 //go:generate mockgen -destination=exporter_mock_test.go -package=exporters_test github.com/openconfig/gnmi-gateway/gateway/exporters Exporter
 
 import (
-	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 )
 
 var Registry = make(map[string]func(config *configuration.GatewayConfig) Exporter)
@@ -38,7 +38,7 @@ type Exporter interface {
 	// receives all of the updates from gNMI targets that the gateway has a
 	// subscription for. If Start returns an error the gateway will fail to
 	// start with an error.
-	Start(*cache.Cache) error
+	Start(*connections.ConnectionManager) error
 	// Export will be called once for every gNMI notification that is inserted
 	// into the cache.Cache. Export should complete as quickly as possible to
 	// prevent delays in the system and upstream gNMI clients.

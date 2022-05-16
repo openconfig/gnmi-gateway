@@ -55,6 +55,8 @@ type ConnectionManager interface {
 	// TargetControlChan returns an input channel for TargetConnectionControl
 	// messages.
 	TargetControlChan() chan<- *TargetConnectionControl
+
+	GetTargetConfig(targetName string) (targetpb.Target, bool)
 }
 
 // TargetConnectionControl messages are used to insert/update and remove targets in

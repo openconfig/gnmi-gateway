@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	prom "github.com/prometheus/client_golang/prometheus"
@@ -29,6 +28,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/openconfig"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
@@ -53,7 +53,7 @@ func NewPrometheusExporter(config *configuration.GatewayConfig) exporters.Export
 
 type PrometheusExporter struct {
 	config     *configuration.GatewayConfig
-	cache      *cache.Cache
+	connMgr    *connections.ConnectionManager
 	deltaCalc  *DeltaCalculator
 	metrics    map[Hash]prom.Metric
 	typeLookup *openconfig.TypeLookup
@@ -109,12 +109,12 @@ func (e *PrometheusExporter) Export(leaf *ctree.Leaf) {
 	}
 }
 
-func (e *PrometheusExporter) Start(cache *cache.Cache) error {
+func (e *PrometheusExporter) Start(connMgr *connections.ConnectionManager) error {
 	e.config.Log.Info().Msg("Starting Prometheus exporter.")
 	if e.config.OpenConfigDirectory == "" {
 		return errors.New("value is not set for OpenConfigDirectory configuration")
 	}
-	e.cache = cache
+	e.connMgr = connMgr
 	err := e.typeLookup.LoadAllModules(e.config.OpenConfigDirectory)
 	if err != nil {
 		e.config.Log.Error().Err(err).Msgf("Unable to load OpenConfig modules in %s: %v", e.config.OpenConfigDirectory, err)

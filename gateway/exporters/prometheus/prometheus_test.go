@@ -16,14 +16,15 @@
 package prometheus
 
 import (
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi/cache"
-	"github.com/openconfig/gnmi/ctree"
-	pb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"math/rand"
 	"strconv"
 	"testing"
+
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
+	"github.com/openconfig/gnmi/ctree"
+	pb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -75,9 +76,10 @@ func TestPrometheusExporter_Export(t *testing.T) {
 	calc := NewDeltaCalculator()
 	calc.Calc(metricHash, 20)
 
+	var connMgr connections.ConnectionManager
 	e := &PrometheusExporter{
 		config:    &configuration.GatewayConfig{},
-		cache:     cache.New(nil),
+		connMgr:   &connMgr,
 		deltaCalc: calc,
 		metrics: map[Hash]prom.Metric{
 			metricHash: promauto.NewCounter(prom.CounterOpts{

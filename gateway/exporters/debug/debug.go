@@ -18,11 +18,11 @@
 package debug
 
 import (
-	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
 )
@@ -43,8 +43,8 @@ func NewDebugExporter(config *configuration.GatewayConfig) exporters.Exporter {
 }
 
 type DebugExporter struct {
-	cache  *cache.Cache
-	config *configuration.GatewayConfig
+	connMgr *connections.ConnectionManager
+	config  *configuration.GatewayConfig
 }
 
 func (e *DebugExporter) Name() string {
@@ -56,8 +56,8 @@ func (e *DebugExporter) Export(leaf *ctree.Leaf) {
 	e.config.Log.Info().Msg(utils.GNMINotificationPrettyString(notification))
 }
 
-func (e *DebugExporter) Start(cache *cache.Cache) error {
-	_ = cache
+func (e *DebugExporter) Start(connMgr *connections.ConnectionManager) error {
+	_ = connMgr
 	e.config.Log.Info().Msg("Starting Debug exporter.")
 	return nil
 }

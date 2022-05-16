@@ -313,7 +313,7 @@ func (g *Gateway) StartGateway(opts *StartOpts) error {
 
 	for _, exporter := range opts.Exporters {
 		go func(exporter exporters.Exporter) {
-			err := exporter.Start(g.connMgr.Cache())
+			err := exporter.Start(&g.connMgr)
 			if err != nil {
 				err = fmt.Errorf("unable to start exporter '%s': %v", exporter.Name(), err)
 				g.config.Log.Error().Msg(err.Error())

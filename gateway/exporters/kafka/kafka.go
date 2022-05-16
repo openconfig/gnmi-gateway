@@ -27,6 +27,7 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
 )
@@ -75,7 +76,7 @@ func (e *KafkaExporter) Export(leaf *ctree.Leaf) {
 	}
 }
 
-func (e *KafkaExporter) Start(cache *cache.Cache) error {
+func (e *KafkaExporter) Start(connMgr *connections.ConnectionManager) error {
 	e.config.Log.Info().Msg("Starting Kafka exporter.")
 
 	if e.config.Exporters.KafkaTopic == "" {

@@ -21,6 +21,7 @@ import (
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/cache"
@@ -132,8 +133,8 @@ func (e *InfluxDBExporter) Export(leaf *ctree.Leaf) {
 	writer.WritePoint(p)
 }
 
-func (e *InfluxDBExporter) Start(cache *cache.Cache) error {
-	_ = cache
+func (e *InfluxDBExporter) Start(connMgr *connections.ConnectionManager) error {
+	_ = connMgr
 	e.config.Log.Info().Msg("Starting InfluxDBv2 exporter.")
 
 	_, err := url.ParseRequestURI(e.config.Exporters.InfluxDBTarget)

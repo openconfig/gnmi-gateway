@@ -22,6 +22,7 @@ import (
 
 	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi/cache"
+	targetpb "github.com/openconfig/gnmi/proto/target"
 	targetlib "github.com/openconfig/gnmi/target"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
@@ -191,4 +192,22 @@ func (c *ZookeeperConnectionManager) Start() error {
 
 func MakeTargetLockPath(prefix string, target string) string {
 	return strings.TrimRight(prefix, "/") + "/target/" + target
+}
+
+func (c *ZookeeperConnectionManager) GetTargetConfig(targetName string) (targetpb.Target, bool) {
+	c.connectionsMutex.Lock()
+	defer c.connectionsMutex.Unlock()
+
+	connection, found := c.connections[targetName]
+	var target targetpb.Target
+
+	if !found {
+		return target, false
+	}
+	if connection.target == nil {
+		return target, false
+	}
+	target = *connection.target
+
+	return target, true
 }

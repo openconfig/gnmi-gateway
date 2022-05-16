@@ -1,6 +1,7 @@
 package azure
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,22 +13,35 @@ import (
 	"net/http"
 
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
-	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/ctree"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/rs/zerolog"
 )
 
 const Name = "azure"
 
 var _ exporters.Exporter = new(AzureExporter)
 
+type Metric struct {
+	Timestamp  time.Time `json:"time"`
+	MetricData Data      `json:"data"`
+}
+type Data struct {
+	Base BaseData `json:"baseData"`
+}
+type BaseData struct {
+	Measurement string                   `json:"metric"`
+	Namespace   string                   `json:"namespace"`
+	DimNames    []string                 `json:"dimNames"`
+	Series      []map[string]interface{} `json:"series"`
+}
+
 type Point struct {
-	Tags        map[string]string
-	Measurement string
-	Fields      map[string]interface{}
-	Timestamp   time.Time
+	Tags   map[string]string
+	Fields map[string]interface{}
 }
 
 func init() {
@@ -52,11 +66,9 @@ type AzureToken struct {
 }
 
 type AzureExporter struct {
-	cache          *cache.Cache
-	config         *configuration.GatewayConfig
-	tokenEndpoint  string
-	metricEndpoint string
-	token          *AzureToken
+	config  *configuration.GatewayConfig
+	connMgr *connections.ConnectionManager
+	token   *AzureToken
 }
 
 func (e *AzureExporter) Name() string {
@@ -65,13 +77,22 @@ func (e *AzureExporter) Name() string {
 
 func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 	notification := leaf.Value().(*gnmipb.Notification)
-	e.config.Log.Info().Msg(utils.GNMINotificationPrettyString(notification))
 
 	point := Point{
-		Timestamp: time.Unix(0, notification.Timestamp),
-		Tags:      make(map[string]string),
-		Fields:    make(map[string]interface{}),
+		Fields: make(map[string]interface{}),
 	}
+
+	baseData := BaseData{}
+
+	metric := Metric{
+		Timestamp: time.Unix(0, notification.Timestamp),
+	}
+
+	var clientID string
+	var clientSecret string
+	var tenantID string
+	var metricEndpoint string
+	var tokenEndpoint string
 
 	for _, update := range notification.Update {
 		var name string
@@ -89,7 +110,7 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 
 		name, elems = elems[len(elems)-1], elems[:len(elems)-1]
 
-		if point.Measurement == "" {
+		if baseData.Measurement == "" {
 			path := strings.Join(elems, "/")
 
 			p := notification.GetPrefix()
@@ -105,62 +126,121 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 				keys["target"] = target
 			}
 
-			point.Measurement = pathToMetricName(path)
+			baseData.Measurement = pathToMetricName(path)
+
 			point.Tags = keys
+			targetConfig, found := (*e.connMgr).GetTargetConfig(point.Tags["target"])
+			if found {
+				deviceID, exists := targetConfig.Meta["deviceID"]
+				if exists {
+					point.Tags["deviceID"] = deviceID
+				}
+				rackID, exists := targetConfig.Meta["rackID"]
+				if exists {
+					point.Tags["rackID"] = rackID
+				}
+				fabricID, exists := targetConfig.Meta["fabricID"]
+				if exists {
+					point.Tags["fabricID"] = fabricID
+				}
+				tenantID, exists = targetConfig.Meta["tenantID"]
+				if !exists {
+					e.config.Log.Error().Msg("Azure Tenant ID is not set in the metadata of device" + point.Tags["target"])
+					return
+				}
+				tokenEndpoint = "https://login.microsoftonline.com/" + tenantID + "/oauth2/token"
+				clientID, exists = targetConfig.Meta["clientID"]
+				if !exists {
+					e.config.Log.Error().Msg("Azure Client ID is not set in the metadata of device" + point.Tags["target"])
+					return
+				}
+				clientSecret, exists = targetConfig.Meta["clientSecret"]
+				if !exists {
+					e.config.Log.Error().Msg("Azure Client Secret is not set in the metadata of device" + point.Tags["target"])
+					return
+				}
+				location, exists := targetConfig.Meta["location"]
+				if !exists {
+					e.config.Log.Error().Msg("Azure Resource Group location is not set in the metadata of device" + point.Tags["target"])
+					return
+				}
+				metricEndpoint = "https://" + location + ".monitoring.azure.com" + deviceID + "/metrics"
+			}
 		}
 
 		point.Fields[pathToMetricName(name)] = value
 	}
 
-	if point.Measurement == "" {
-		e.config.Log.Error().Msg("Point measurement is empty. Returning.")
+	if baseData.Measurement == "" {
+		//e.config.Log.Error().Msg("Point measurement is empty. Returning.")
 		return
 	}
 
-	pointJSON, err := json.Marshal(point)
+	dimNames := []string{"fabricID", "rackID", "deviceID"}
+	tagKeys := make([]string, 0, len(point.Tags))
+	tagVals := make([]string, 0, len(point.Tags))
+	for k, v := range point.Tags {
+		tagKeys = append(tagKeys, k)
+		tagVals = append(tagVals, v)
+	}
+	dimNames = append(baseData.DimNames, tagKeys...)
+
+	dimValues := []string{}
+	dimValues = append(dimValues, tagVals...)
+	baseData.DimNames = dimNames
+
+	value := make(map[string]interface{})
+
+	value["dimValues"] = dimValues
+
+	for k, v := range point.Fields {
+		value[k] = v
+		switch v.(type) {
+		case int, float64, float32:
+			value["min"] = v
+			value["max"] = v
+			value["sum"] = v
+		default:
+			e.config.Log.Error().Msg("Received metric field with non-numeric type")
+			return
+		}
+
+	}
+	value["count"] = 1
+
+	baseData.Series = append(baseData.Series, value)
+
+	baseData.Namespace = "Interface metrics"
+
+	metric.MetricData.Base = baseData
+
+	metricJSON, err := json.Marshal(metric)
 
 	if err != nil {
 		e.config.Log.Error().Msg("Failed to marshal point into JSON")
 		return
 	}
 
-	fmt.Println("\n", string(pointJSON))
+	e.config.Log.Debug().Msg(string(metricJSON))
 
-	if err = writeJSONMetric(string(pointJSON), e.token.Token, e.metricEndpoint); err != nil {
-		e.config.Log.Error().Msg("Failed to push metric to Azure Monitor endpoint")
+	// TODO - Take token validity into consideration
+	if e.token == nil {
+		e.token, err = generateToken(tokenEndpoint, clientID, clientSecret, e.config.Log)
+	}
+
+	if err != nil {
+		e.config.Log.Error().Msg(err.Error())
+		return
+	}
+	if err = writeJSONMetric(metricJSON, e.token.Token, metricEndpoint, e.config.Log); err != nil {
+		e.config.Log.Error().Msg("Failed to push metric to Azure Monitor endpoint: \n" + err.Error())
 		return
 	}
 }
 
-func (e *AzureExporter) Start(cache *cache.Cache) error {
-	_ = cache
+func (e *AzureExporter) Start(connMgr *connections.ConnectionManager) error {
+	e.connMgr = connMgr
 	e.config.Log.Info().Msg("Starting Azure Monitor exporter.")
-
-	if e.config.Exporters.AzureMetricEndpoint == "" {
-		return errors.New("AzureMetricEndpoint is not set")
-	}
-
-	if e.config.Exporters.AzureTokenEndpoint == "" {
-		return errors.New("AzureTokenEndpoint is not set")
-	}
-
-	if e.config.Exporters.AzureClientID == "" {
-		return errors.New("AzureClientID is not set")
-	}
-
-	if e.config.Exporters.AzureClientSecret == "" {
-		return errors.New("AzureClientSecret is not set")
-	}
-
-	e.metricEndpoint = e.config.Exporters.AzureMetricEndpoint
-	e.tokenEndpoint = e.config.Exporters.AzureTokenEndpoint
-
-	var err error
-	e.token, err = generateToken(e.tokenEndpoint, e.config.Exporters.AzureClientID, e.config.Exporters.AzureClientSecret)
-
-	if err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -194,12 +274,7 @@ func extractPrefixAndPathKeys(prefix *gnmipb.Path, path *gnmipb.Path) ([]string,
 	return elems, keys, nil
 }
 
-func generateToken(endpoint string, clientID string, clientSecret string) (*AzureToken, error) {
-	fmt.Println("\nGenerating token using:")
-	fmt.Println("\nAuth endpoint: ", endpoint)
-	fmt.Println("\nAuth clientID: ", clientID)
-	fmt.Println("\nAuth clientSecret: ", clientSecret)
-	fmt.Println("")
+func generateToken(endpoint string, clientID string, clientSecret string, logger zerolog.Logger) (*AzureToken, error) {
 	response, err := http.PostForm(
 		endpoint,
 		url.Values{
@@ -210,17 +285,54 @@ func generateToken(endpoint string, clientID string, clientSecret string) (*Azur
 		},
 	)
 	if err != nil {
-		fmt.Println("Error generating token")
+		logger.Debug().Msg("Error generating token")
 		return nil, err
 	}
 	responseBody, err := io.ReadAll(response.Body)
-	fmt.Println("\nGot response body: ", string(responseBody))
 
 	var token AzureToken
 	json.Unmarshal(responseBody, &token)
 	return &token, nil
 }
 
-func writeJSONMetric(data string, token string, metricEndpoint string) error {
+func writeJSONMetric(jsonData []byte, token string, metricEndpoint string, logger zerolog.Logger) error {
+
+	_, err := url.ParseRequestURI(metricEndpoint)
+
+	if err != nil {
+		return err
+	}
+
+	var m Metric
+	if err = json.Unmarshal(jsonData, &m); err != nil {
+		return err
+	}
+
+	bearer := "Bearer " + token
+	request, err := http.NewRequest("POST", metricEndpoint, bytes.NewBuffer(jsonData))
+
+	if err != nil {
+		return err
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", bearer)
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	if response.Status != "200 OK" {
+		logger.Error().Msg("response status:" + response.Status)
+		respBody, err := io.ReadAll(response.Body)
+		if err != nil {
+			return err
+		}
+		logger.Error().Msg("\nMetric publishing failed with message:\n" + string(respBody))
+		return nil
+	}
 	return nil
 }

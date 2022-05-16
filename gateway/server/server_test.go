@@ -58,6 +58,7 @@ import (
 	gnmiclient "github.com/openconfig/gnmi/client/gnmi"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/path"
+	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/testing/fake/testing/grpc/config"
 	"github.com/openconfig/gnmi/value"
 	"google.golang.org/grpc"
@@ -1326,6 +1327,10 @@ func (m MockConnectionManager) Forwardable(target string) bool {
 }
 
 func (m MockConnectionManager) Start() error {
+	panic("implement me")
+}
+
+func (m MockConnectionManager) GetTargetConfig(targetName string) (targetpb.Target, bool) {
 	panic("implement me")
 }
 
