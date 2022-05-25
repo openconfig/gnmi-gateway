@@ -1,4 +1,4 @@
-FROM golang:1.13-alpine
+FROM golang:1.18-alpine
 
 ENV INSTALL_DIR /opt/gnmi-gateway
 ENV ZOOKEEPER_HOSTS ""

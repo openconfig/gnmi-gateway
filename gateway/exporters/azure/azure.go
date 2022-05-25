@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/url"
 	"strings"
 	"time"
@@ -225,7 +225,12 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 
 	// TODO - Take token validity into consideration
 	if e.token == nil {
+		e.config.Log.Info().Msg("Generating token from: " + tokenEndpoint)
 		e.token, err = generateToken(tokenEndpoint, clientID, clientSecret, e.config.Log)
+		if err != nil {
+			e.config.Log.Error().Msg("Error generating token: " + err.Error())
+			return
+		}
 	}
 
 	if err != nil {
@@ -275,20 +280,33 @@ func extractPrefixAndPathKeys(prefix *gnmipb.Path, path *gnmipb.Path) ([]string,
 }
 
 func generateToken(endpoint string, clientID string, clientSecret string, logger zerolog.Logger) (*AzureToken, error) {
+	if endpoint == "" {
+		return nil, errors.New("generateToken: endpoint is not set")
+	}
+	if clientID == "" {
+		return nil, errors.New("generateToken: clientID is not set")
+	}
+	if clientSecret == "" {
+		return nil, errors.New("generateToken: endpoint is not set")
+	}
+
+	responseURL := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {clientID},
+		"client_secret": {clientSecret},
+		"resource":      {"https://monitoring.azure.com/"},
+	}
 	response, err := http.PostForm(
 		endpoint,
-		url.Values{
-			"grant_type":    {"client_credentials"},
-			"client_id":     {clientID},
-			"client_secret": {clientSecret},
-			"resource":      {"https://monitoring.azure.com/"},
-		},
+		responseURL,
 	)
 	if err != nil {
-		logger.Debug().Msg("Error generating token")
+		logger.Error().Msg("Error generating token")
+		logger.Error().Msg("Token endpoint: " + endpoint)
+		logger.Error().Msg("URL values: { client_id: " + clientID)
 		return nil, err
 	}
-	responseBody, err := io.ReadAll(response.Body)
+	responseBody, err := ioutil.ReadAll(response.Body)
 
 	var token AzureToken
 	json.Unmarshal(responseBody, &token)
@@ -300,6 +318,7 @@ func writeJSONMetric(jsonData []byte, token string, metricEndpoint string, logge
 	_, err := url.ParseRequestURI(metricEndpoint)
 
 	if err != nil {
+		logger.Error().Msg("Invalid URL: " + metricEndpoint)
 		return err
 	}
 
@@ -327,7 +346,7 @@ func writeJSONMetric(jsonData []byte, token string, metricEndpoint string, logge
 
 	if response.Status != "200 OK" {
 		logger.Error().Msg("response status:" + response.Status)
-		respBody, err := io.ReadAll(response.Body)
+		respBody, err := ioutil.ReadAll(response.Body)
 		if err != nil {
 			return err
 		}
