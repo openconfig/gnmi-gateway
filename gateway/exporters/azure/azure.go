@@ -12,6 +12,8 @@ import (
 
 	"net/http"
 
+	"path"
+
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
@@ -84,15 +86,29 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 
 	baseData := BaseData{}
 
+	timestamp := time.Unix(0, notification.Timestamp)
+	beforeLimit := (time.Now()).Add(-30 * time.Minute)
+	afterLimit := (time.Now()).Add(4 * time.Minute)
+
+	if timestamp.Before(beforeLimit) || timestamp.After(afterLimit) {
+		return
+	}
+
 	metric := Metric{
-		Timestamp: time.Unix(0, notification.Timestamp),
+		Timestamp: timestamp,
 	}
 
 	var clientID string
 	var clientSecret string
 	var tenantID string
+
+	var deviceName string
+	var rackName string
+	var fabricName string
+
 	var metricEndpoint string
 	var tokenEndpoint string
+	foundNumeric := false
 
 	for _, update := range notification.Update {
 		var name string
@@ -103,6 +119,8 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 			continue
 		}
 
+		foundNumeric = true
+
 		elems, keys, err := extractPrefixAndPathKeys(notification.GetPrefix(), update.GetPath())
 		if err != nil {
 			e.config.Log.Info().Msg(fmt.Sprintf("Failed to extract path or keys: %s", err))
@@ -111,13 +129,13 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 		name, elems = elems[len(elems)-1], elems[:len(elems)-1]
 
 		if baseData.Measurement == "" {
-			path := strings.Join(elems, "/")
+			measurementPath := strings.Join(elems, "/")
 
 			p := notification.GetPrefix()
 			target := p.GetTarget()
 			origin := p.GetOrigin()
 
-			keys["path"] = path
+			keys["path"] = measurementPath
 			if origin != "" {
 				keys["origin"] = origin
 			}
@@ -126,53 +144,84 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 				keys["target"] = target
 			}
 
-			baseData.Measurement = pathToMetricName(path)
+			baseData.Measurement = pathToMetricName(measurementPath)
 
 			point.Tags = keys
+
 			targetConfig, found := (*e.connMgr).GetTargetConfig(point.Tags["target"])
+
 			if found {
+
 				deviceID, exists := targetConfig.Meta["deviceID"]
 				if exists {
 					point.Tags["deviceID"] = deviceID
+					deviceName = path.Base(deviceID)
+				} else {
+					e.config.Log.Error().Msg("Device ARM ID is not set in the metadata of device" + point.Tags["target"])
+					return
 				}
+
 				rackID, exists := targetConfig.Meta["rackID"]
 				if exists {
 					point.Tags["rackID"] = rackID
+					rackName = path.Base(rackID)
+				} else {
+					e.config.Log.Error().Msg("Rack ARM ID is not set in the metadata of device" + point.Tags["target"])
+					return
 				}
+
 				fabricID, exists := targetConfig.Meta["fabricID"]
 				if exists {
 					point.Tags["fabricID"] = fabricID
+					fabricName = path.Base(fabricID)
+				} else {
+					e.config.Log.Error().Msg("Fabric ARM ID is not set in the metadata of device" + point.Tags["target"])
+					return
 				}
+
 				tenantID, exists = targetConfig.Meta["tenantID"]
 				if !exists {
 					e.config.Log.Error().Msg("Azure Tenant ID is not set in the metadata of device" + point.Tags["target"])
 					return
 				}
 				tokenEndpoint = "https://login.microsoftonline.com/" + tenantID + "/oauth2/token"
+
 				clientID, exists = targetConfig.Meta["clientID"]
 				if !exists {
 					e.config.Log.Error().Msg("Azure Client ID is not set in the metadata of device" + point.Tags["target"])
 					return
 				}
+
 				clientSecret, exists = targetConfig.Meta["clientSecret"]
 				if !exists {
 					e.config.Log.Error().Msg("Azure Client Secret is not set in the metadata of device" + point.Tags["target"])
 					return
 				}
+
 				location, exists := targetConfig.Meta["location"]
 				if !exists {
 					e.config.Log.Error().Msg("Azure Resource Group location is not set in the metadata of device" + point.Tags["target"])
 					return
 				}
-				metricEndpoint = "https://" + location + ".monitoring.azure.com" + deviceID + "/metrics"
+
+				// Push metrics to fabric
+				metricEndpoint = "https://" + location + ".monitoring.azure.com" + fabricID + "/metrics"
+			} else {
+				e.config.Log.Error().Msg("Target config not found for target: " + point.Tags["target"])
+				return
 			}
 		}
 
 		point.Fields[pathToMetricName(name)] = value
 	}
 
+	if !foundNumeric {
+		e.config.Log.Debug().Msg("No numeric values found in notification updates. Skipping...")
+		return
+	}
+
 	if baseData.Measurement == "" {
-		//e.config.Log.Error().Msg("Point measurement is empty. Returning.")
+		e.config.Log.Info().Msg("Point measurement is empty. Returning.")
 		return
 	}
 
@@ -187,6 +236,10 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 
 	dimValues := []string{}
 	dimValues = append(dimValues, tagVals...)
+
+	dimNames = append(dimNames, []string{"fabricName", "rackName", "deviceName"}...)
+	dimValues = append(dimValues, []string{fabricName, rackName, deviceName}...)
+
 	baseData.DimNames = dimNames
 
 	value := make(map[string]interface{})
@@ -221,12 +274,17 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 		return
 	}
 
-	e.config.Log.Debug().Msg(string(metricJSON))
+	// e.config.Log.Info().Msg(string(metricJSON))
 
 	// TODO - Take token validity into consideration
 	if e.token == nil {
-		e.config.Log.Info().Msg("Generating token from: " + tokenEndpoint)
+		if tokenEndpoint == "" {
+			e.config.Log.Error().Msg("Token endpoint is not set: " + tokenEndpoint)
+			return
+		}
+
 		e.token, err = generateToken(tokenEndpoint, clientID, clientSecret, e.config.Log)
+
 		if err != nil {
 			e.config.Log.Error().Msg("Error generating token: " + err.Error())
 			return
@@ -250,15 +308,15 @@ func (e *AzureExporter) Start(connMgr *connections.ConnectionManager) error {
 	return nil
 }
 
-func pathToMetricName(path string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(path, "/", "_"), "-", "_")
+func pathToMetricName(metricPath string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(metricPath, "/", "_"), "-", "_")
 }
 
-func extractPrefixAndPathKeys(prefix *gnmipb.Path, path *gnmipb.Path) ([]string, map[string]string, error) {
+func extractPrefixAndPathKeys(prefix *gnmipb.Path, metricPath *gnmipb.Path) ([]string, map[string]string, error) {
 	elems := make([]string, 0)
 	keys := make(map[string]string)
-	for _, path := range []*gnmipb.Path{prefix, path} {
-		for _, e := range path.Elem {
+	for _, metricPath := range []*gnmipb.Path{prefix, metricPath} {
+		for _, e := range metricPath.Elem {
 			name := e.Name
 			elems = append(elems, name)
 

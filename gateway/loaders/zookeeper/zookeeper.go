@@ -255,6 +255,18 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 		Request: make(map[string]*gnmi.SubscribeRequest),
 	}
 
+	for connName, conn := range t.Connection {
+		configs.Target[connName] = &targetpb.Target{
+			Addresses: conn.Addresses,
+			Request:   conn.Request,
+			Meta:      conn.Meta,
+			Credentials: &targetpb.Credentials{
+				Username: conn.Credentials.Username,
+				Password: conn.Credentials.Password,
+			},
+		}
+	}
+
 	for requestName, request := range t.Request {
 		var subs []*gnmi.Subscription
 		for _, x := range request.Paths {
@@ -275,11 +287,18 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 			}
 			subs = append(subs, &gnmi.Subscription{Path: path})
 		}
+		targetName, found := getRequestTargetName(configs.Target, requestName)
+
+		if !found {
+			z.config.Log.Error().Msg("No target uses request with name: " + requestName)
+			continue
+		}
+
 		configs.Request[requestName] = &gnmi.SubscribeRequest{
 			Request: &gnmi.SubscribeRequest_Subscribe{
 				Subscribe: &gnmi.SubscriptionList{
 					Prefix: &gnmi.Path{
-						Target: request.Target,
+						Target: targetName,
 					},
 					Subscription: subs,
 				},
@@ -287,16 +306,14 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 		}
 	}
 
-	for connName, conn := range t.Connection {
-		configs.Target[connName] = &targetpb.Target{
-			Addresses: conn.Addresses,
-			Request:   conn.Request,
-			Meta:      conn.Meta,
-			Credentials: &targetpb.Credentials{
-				Username: conn.Credentials.Username,
-				Password: conn.Credentials.Password,
-			},
+	return configs, nil
+}
+
+func getRequestTargetName(targets map[string]*targetpb.Target, requestName string) (string, bool) {
+	for target, config := range targets {
+		if config.Request == requestName {
+			return target, true
 		}
 	}
-	return configs, nil
+	return "", false
 }
