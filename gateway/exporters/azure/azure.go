@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,10 +60,10 @@ func NewAzureExporter(config *configuration.GatewayConfig) exporters.Exporter {
 
 type AzureToken struct {
 	TokenType    string `json:"token_type"`
-	ExpiresIn    int    `json:"expires_in"`
-	ExtExpiresIn int    `json:"ext_expires_in"`
-	ExpiresOn    int    `json:"expires_on"`
-	NotBefore    int    `json:"not_before"`
+	ExpiresIn    string `json:"expires_in"`
+	ExtExpiresIn string `json:"ext_expires_in"`
+	ExpiresOn    string `json:"expires_on"`
+	NotBefore    string `json:"not_before"`
 	Resource     string `json:"resource"`
 	Token        string `json:"access_token"`
 }
@@ -276,7 +277,6 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 
 	// e.config.Log.Info().Msg(string(metricJSON))
 
-	// TODO - Take token validity into consideration
 	if e.token == nil {
 		if tokenEndpoint == "" {
 			e.config.Log.Error().Msg("Token endpoint is not set: " + tokenEndpoint)
@@ -289,6 +289,22 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 			e.config.Log.Error().Msg("Error generating token: " + err.Error())
 			return
 		}
+	} else {
+		tokenExpireUnix, err := strconv.Atoi(e.token.ExpiresOn)
+		if err != nil {
+			return
+		}
+
+		tokenExpireDate := time.Unix(int64(tokenExpireUnix), 0).Add((-1) * time.Minute)
+
+		if time.Now().After(tokenExpireDate) {
+			e.token, err = generateToken(tokenEndpoint, clientID, clientSecret, e.config.Log)
+
+			if err != nil {
+				e.config.Log.Error().Msg("Error generating token: " + err.Error())
+				return
+			}
+		}
 	}
 
 	if err != nil {
@@ -297,7 +313,19 @@ func (e *AzureExporter) Export(leaf *ctree.Leaf) {
 	}
 	if err = writeJSONMetric(metricJSON, e.token.Token, metricEndpoint, e.config.Log); err != nil {
 		e.config.Log.Error().Msg("Failed to push metric to Azure Monitor endpoint: \n" + err.Error())
-		return
+		if err.Error() == "401" {
+			e.token, err = generateToken(tokenEndpoint, clientID, clientSecret, e.config.Log)
+			if err != nil {
+				e.config.Log.Error().Msg("Error generating token: " + err.Error())
+				return
+			}
+			err = writeJSONMetric(metricJSON, e.token.Token, metricEndpoint, e.config.Log)
+			if err != nil {
+				return
+			}
+		} else {
+			return
+		}
 	}
 }
 
@@ -368,6 +396,15 @@ func generateToken(endpoint string, clientID string, clientSecret string, logger
 
 	var token AzureToken
 	json.Unmarshal(responseBody, &token)
+
+	tokenExpireUnix, err := strconv.Atoi(token.ExpiresOn)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenExpireDate := time.Unix(int64(tokenExpireUnix), 0)
+	logger.Info().Msg(fmt.Sprintf("New Azure Monitor token is valid until: %s", tokenExpireDate))
+
 	return &token, nil
 }
 
@@ -409,7 +446,8 @@ func writeJSONMetric(jsonData []byte, token string, metricEndpoint string, logge
 			return err
 		}
 		logger.Error().Msg("\nMetric publishing failed with message:\n" + string(respBody))
-		return nil
+
+		return errors.New(strconv.Itoa(response.StatusCode))
 	}
 	return nil
 }
