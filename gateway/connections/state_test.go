@@ -16,7 +16,7 @@
 package connections
 
 import (
-	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi-gateway/gateway/cache"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/stretchr/testify/assert"
 	"testing"

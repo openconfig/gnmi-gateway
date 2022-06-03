@@ -8,7 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	cache "github.com/openconfig/gnmi/cache"
+	cache "github.com/openconfig/gnmi-gateway/gateway/cache"
 	ctree "github.com/openconfig/gnmi/ctree"
 )
 

@@ -53,7 +53,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi-gateway/gateway/cache"
 	"github.com/openconfig/gnmi/client"
 	gnmiclient "github.com/openconfig/gnmi/client/gnmi"
 	"github.com/openconfig/gnmi/ctree"

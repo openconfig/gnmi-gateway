@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/go-zookeeper/zk"
-	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi-gateway/gateway/cache"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	targetlib "github.com/openconfig/gnmi/target"
 	"github.com/rs/zerolog/log"

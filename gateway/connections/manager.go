@@ -36,7 +36,7 @@
 package connections
 
 import (
-	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi-gateway/gateway/cache"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 )
 

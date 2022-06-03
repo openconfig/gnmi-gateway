@@ -41,7 +41,7 @@ import (
 	"github.com/Netflix/spectator-go"
 	"github.com/Netflix/spectator-go/histogram"
 	"github.com/golang/protobuf/proto"
-	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi-gateway/gateway/cache"
 	"github.com/openconfig/gnmi/client"
 	gnmiclient "github.com/openconfig/gnmi/client/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"

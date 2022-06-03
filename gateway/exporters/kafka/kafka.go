@@ -20,7 +20,7 @@ import (
 	"errors"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi-gateway/gateway/cache"
 	"github.com/openconfig/gnmi/ctree"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/rs/zerolog"
