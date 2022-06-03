@@ -54,6 +54,12 @@ type RequestConfig struct {
 	// suppress_redundant is in use. The target should send a value at least once
 	// in the period specified.
 	HeartbeatInterval uint64 `yaml:"heartbeatInterval"`
+	// An optional field to specify that only updates to current state should be
+	// sent to a client. If set, the initial state is not sent to the client but
+	// rather only the sync message followed by any subsequent updates to the
+	// current state. For ONCE and POLL modes, this causes the server to send only
+	// the sync message (Sec. 3.5.2.3).
+	UpdatesOnly bool `yaml:"updatesOnly"`
 
 }
 
@@ -306,6 +312,7 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 						Target: request.Target,
 					},
 					Subscription: subs,
+					UpdatesOnly: request.UpdatesOnly,
 				},
 			},
 		}
