@@ -53,6 +53,13 @@ type Target struct {
 	lat    *latency.Latency   // latency measurements
 	tsmu   sync.Mutex         // protects latest timestamp
 	ts     time.Time          // latest timestamp for an update
+	// By default, the subscribe notifications are suppressed if there aren't
+	// any changes. If enabled, stale updates will be emitted.
+	emitStaleUpdates bool
+}
+
+func (t *Target) SetEmitStaleUpdates(val bool) {
+	t.emitStaleUpdates = val
 }
 
 // Name returns the name of the target.
@@ -470,12 +477,14 @@ func (t *Target) gnmiUpdate(n *pb.Notification) (*ctree.Leaf, error) {
 				// Allow to continue to update the cache taking the last supplied value for this timestamp.
 			} else {
 				t.meta.AddInt(metadata.StaleCount, 1)
-				return nil, errors.New("update is stale")
+				if !t.emitStaleUpdates {
+					return nil, errors.New("update is stale")
+				}
 			}
 		}
 		oldval.Update(n)
 		// Simulate event-driven for all non-atomic updates.
-		if !n.Atomic && value.Equal(old.Update[0].Val, n.Update[0].Val) {
+		if !t.emitStaleUpdates && !n.Atomic && value.Equal(old.Update[0].Val, n.Update[0].Val) {
 			t.meta.AddInt(metadata.SuppressedCount, 1)
 			return nil, nil
 		}
