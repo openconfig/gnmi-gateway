@@ -135,3 +135,7 @@ func GetNumberValues(tv *gnmi.TypedValue) (float64, bool) {
 	}
 	return 0, false
 }
+
+func IsWildcardTarget(target string) bool {
+	return strings.Contains(target, "*")
+}

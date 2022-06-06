@@ -291,7 +291,7 @@ func (t *ConnectionState) disconnected() {
 	t.seenMutex.Lock()
 	t.seen = map[string]bool{}
 	t.seenMutex.Unlock()
-	if t.queryTarget != "*" {
+	if !t.isWildcardTarget() {
 		t.targetCache.Reset()
 	}
 	t.config.Log.Info().Msgf("Target %s: Disconnected", t.name)
@@ -309,6 +309,10 @@ func (t *ConnectionState) unlock() error {
 	//return t.client.Close()
 }
 
+func (t *ConnectionState) isWildcardTarget() bool {
+	return utils.IsWildcardTarget(t.queryTarget)
+}
+
 // handleUpdate parses a protobuf message received from the targetCache. This implementation handles only
 // gNMI SubscribeResponse messages. When the message is an Update, the GnmiUpdate method of the
 // cache.Target is called to generate an update. If the message is a sync_response, then targetCache is
@@ -317,7 +321,7 @@ func (t *ConnectionState) handleUpdate(msg proto.Message) error {
 	//fmt.Printf("%+v\n", msg)
 	t.counterNotifications.Increment()
 	if !t.connected {
-		if t.queryTarget != "*" {
+		if !t.isWildcardTarget() {
 			t.targetCache.Connect()
 		}
 		t.connected = true
@@ -341,8 +345,7 @@ func (t *ConnectionState) handleUpdate(msg proto.Message) error {
 			t.timerLatency.Record(time.Duration(time.Now().UnixNano() - v.Update.Timestamp))
 		}
 
-		switch t.queryTarget {
-		case "*":
+		if t.isWildcardTarget() {
 			targetCache := t.connManager.Cache().GetTarget(v.Update.Prefix.Target)
 			if targetCache == nil {
 				targetCache = t.connManager.Cache().Add(v.Update.Prefix.Target)
@@ -355,7 +358,7 @@ func (t *ConnectionState) handleUpdate(msg proto.Message) error {
 			if err != nil {
 				return err
 			}
-		default:
+		} else {
 			// Gracefully handle gNMI implementations that do not set Prefix.Target in their
 			// SubscribeResponse Updates.
 			if v.Update.GetPrefix() == nil {
@@ -370,13 +373,9 @@ func (t *ConnectionState) handleUpdate(msg proto.Message) error {
 				return err
 			}
 		}
-
 	case *gnmipb.SubscribeResponse_SyncResponse:
 		t.sync()
-		switch t.queryTarget {
-		case "*":
-			// do nothing
-		default:
+		if !t.isWildcardTarget() {
 			t.targetCache.Sync()
 		}
 	case *gnmipb.SubscribeResponse_Error:

@@ -193,9 +193,6 @@ func ValidateConnection(c *ConnectionConfig) error {
 	if len(c.Addresses) == 0 {
 		return fmt.Errorf("target missing address")
 	}
-	if c.Request == "" {
-		return fmt.Errorf("target missing request")
-	}
 
 	return nil
 }
