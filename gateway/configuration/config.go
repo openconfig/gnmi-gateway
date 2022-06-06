@@ -45,6 +45,10 @@ type GatewayConfig struct {
 	EnableGNMIServer bool `json:"enable_gnmi_server"`
 	// Exporters contains the configuration for the included exporters.
 	Exporters *ExportersConfig `json:"exporters"`
+	// By default, the gnmi cache suppresses the notifications if there aren't
+	// any changes. However, gnmi-gw can be configured to use sampled subscribe
+	// notifications. If this flag is enabled, such notifications will be emitted.
+	EmitStaleUpdates bool `json:"emit_stale_updates"`
 	// GatewayTransitionBufferSize tunes the size of the buffer between targets and exporters/clients.
 	GatewayTransitionBufferSize uint64 `json:"gateway_transition_buffer_size"`
 	// Log is the logger used by the gateway code and gateway packages.

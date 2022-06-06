@@ -41,7 +41,7 @@ import (
 	"github.com/Netflix/spectator-go"
 	"github.com/Netflix/spectator-go/histogram"
 	"github.com/golang/protobuf/proto"
-	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi-gateway/gateway/cache"
 	"github.com/openconfig/gnmi/client"
 	gnmiclient "github.com/openconfig/gnmi/client/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
@@ -347,6 +347,7 @@ func (t *ConnectionState) handleUpdate(msg proto.Message) error {
 			if targetCache == nil {
 				targetCache = t.connManager.Cache().Add(v.Update.Prefix.Target)
 			}
+			targetCache.SetEmitStaleUpdates(t.config.EmitStaleUpdates)
 			t.seenMutex.Lock()
 			t.seen[v.Update.Prefix.Target] = true
 			t.seenMutex.Unlock()
@@ -363,6 +364,7 @@ func (t *ConnectionState) handleUpdate(msg proto.Message) error {
 			if v.Update.Prefix.Target == "" {
 				v.Update.Prefix.Target = t.queryTarget
 			}
+			t.targetCache.SetEmitStaleUpdates(t.config.EmitStaleUpdates)
 			err := t.updateTargetCache(t.targetCache, v.Update)
 			if err != nil {
 				return err

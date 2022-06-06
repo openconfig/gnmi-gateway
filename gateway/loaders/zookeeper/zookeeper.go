@@ -37,6 +37,30 @@ type CredentialsConfig struct {
 type RequestConfig struct {
 	Target string   `yaml:"target"`
 	Paths  []string `yaml:"paths"`
+	// Subscription mode to be used:
+	// 0: SubscriptionMode_TARGET_DEFINED - The target selects the relevant
+	// 										mode for each element.
+	// 1: SubscriptionMode_ON_CHANGE - The target sends an update on element
+	//                                 value change.
+	// 2: SubscriptionMode_SAMPLE - The target samples values according to the
+	//                              interval.
+	Mode   gnmi.SubscriptionMode `yaml:"mode"`
+	// ns between samples in SAMPLE mode.
+	SampleInterval uint64 `yaml:"sampleInterval"`
+	// Indicates whether values that have not changed should be sent in a SAMPLE
+	// subscription.
+	SuppressRedundant bool `yaml:"supressRedundant"`
+	// Specifies the maximum allowable silent period in nanoseconds when
+	// suppress_redundant is in use. The target should send a value at least once
+	// in the period specified.
+	HeartbeatInterval uint64 `yaml:"heartbeatInterval"`
+	// An optional field to specify that only updates to current state should be
+	// sent to a client. If set, the initial state is not sent to the client but
+	// rather only the sync message followed by any subsequent updates to the
+	// current state. For ONCE and POLL modes, this causes the server to send only
+	// the sync message (Sec. 3.5.2.3).
+	UpdatesOnly bool `yaml:"updatesOnly"`
+
 }
 
 type TargetConfig struct {
@@ -285,7 +309,13 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 			if origin != "" {
 				path.Origin = origin
 			}
-			subs = append(subs, &gnmi.Subscription{Path: path})
+			subs = append(subs, &gnmi.Subscription{
+				Path: path,
+				Mode: request.Mode,
+				SampleInterval: request.SampleInterval,
+				SuppressRedundant: request.SuppressRedundant,
+				HeartbeatInterval: request.HeartbeatInterval,
+			})
 		}
 		targetName, found := getRequestTargetName(configs.Target, requestName)
 
@@ -301,6 +331,7 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 						Target: targetName,
 					},
 					Subscription: subs,
+					UpdatesOnly: request.UpdatesOnly,
 				},
 			},
 		}

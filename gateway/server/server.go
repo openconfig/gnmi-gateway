@@ -50,7 +50,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/stats"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi-gateway/gateway/cache"
 	"github.com/openconfig/gnmi/coalesce"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/match"
