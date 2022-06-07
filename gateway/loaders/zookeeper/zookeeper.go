@@ -2,6 +2,7 @@ package zookeeper
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -24,7 +25,6 @@ var _ loaders.TargetLoader = new(ZookeeperTargetLoader)
 
 type ConnectionConfig struct {
 	Addresses   []string          `yaml:"addresses"`
-	Request     string            `yaml:"request"`
 	Meta        map[string]string `yaml:"meta"`
 	Credentials CredentialsConfig `yaml:"credentials"`
 }
@@ -282,7 +282,7 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 	for connName, conn := range t.Connection {
 		configs.Target[connName] = &targetpb.Target{
 			Addresses: conn.Addresses,
-			Request:   conn.Request,
+			Request:   connName,
 			Meta:      conn.Meta,
 			Credentials: &targetpb.Credentials{
 				Username: conn.Credentials.Username,
@@ -317,23 +317,68 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 				HeartbeatInterval: request.HeartbeatInterval,
 			})
 		}
-		targetName, found := getRequestTargetName(configs.Target, requestName)
+		found := false
+		for targetName, _ := range configs.Target {
+			// TODO: consider adding a helper
+			if match, _ := filepath.Match(request.Target, targetName); match {
+				found = true
+				z.config.Log.Info().Msgf("Updating target subscription. " +
+					"Target: %s. Request: %s. Request target pattern: %s.",
+					targetName, requestName, request.Target)
 
-		if !found {
-			z.config.Log.Error().Msg("No target uses request with name: " + requestName)
-			continue
+				// The gnmi client library expects one request per target. However,
+				// the zookeeper loader allows multiple requests per target.
+				// We'll aggregate all the requests that match a specific target.
+				//
+				// Let's take the following example:
+				//
+				// requests:
+				// - name: ce_metrics
+				//   target: ce*
+				//   mode: 2  # (sample)
+				// - name: ce_events
+				//   target: ce*
+				//   mode: 1  # (on change)
+				//
+				// targets: ce1, ce2
+				//
+				// In the above example, we'll generate two identical internal
+				// requests by merging "ce_metrics" and "ce_events", one for
+				// each of the "ce1" and "ce2" targets.
+				var targetRequest *gnmi.SubscribeRequest
+				if targetRequest, found = configs.Request[targetName]; !found {
+					targetRequest = &gnmi.SubscribeRequest{
+						Request: &gnmi.SubscribeRequest_Subscribe{
+							Subscribe: &gnmi.SubscriptionList{
+								Prefix: &gnmi.Path{
+									Target: targetName,
+								},
+								Subscription: subs,
+								// TODO: figure out what's the expected behavior
+								// of the "UpdatesOnly" flag, considering that
+								// we're merging requests.
+								UpdatesOnly: request.UpdatesOnly,
+							},
+						},
+					}
+					configs.Request[targetName] = targetRequest
+				} else {
+					targetRequest.GetSubscribe().Subscription = append(
+						targetRequest.GetSubscribe().Subscription,
+						subs...,
+					)
+				}
+				z.config.Log.Info().Msgf("Updated target subscription. " +
+					"Target: %s. Request: %s. Request target pattern: %s. " +
+					"Subscription count: %d, subscriptions: %v",
+					targetName, requestName, request.Target,
+					len(configs.Request[targetName].GetSubscribe().Subscription),
+					targetRequest.GetSubscribe().Subscription)
+
+			}
 		}
-
-		configs.Request[requestName] = &gnmi.SubscribeRequest{
-			Request: &gnmi.SubscribeRequest_Subscribe{
-				Subscribe: &gnmi.SubscriptionList{
-					Prefix: &gnmi.Path{
-						Target: targetName,
-					},
-					Subscription: subs,
-					UpdatesOnly: request.UpdatesOnly,
-				},
-			},
+		if !found {
+			z.config.Log.Info().Msg("No matching target for request: " + requestName)
 		}
 	}
 
