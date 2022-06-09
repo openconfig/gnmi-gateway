@@ -135,3 +135,31 @@ func GetNumberValues(tv *gnmi.TypedValue) (float64, bool) {
 	}
 	return 0, false
 }
+
+func GetValues(tv *gnmi.TypedValue) (interface{}, bool) {
+	if tv != nil && tv.Value != nil {
+		switch tv.Value.(type) {
+		case *gnmi.TypedValue_StringVal:
+			return tv.Value, true
+		case *gnmi.TypedValue_IntVal:
+			return float64(tv.GetIntVal()), true
+		case *gnmi.TypedValue_UintVal:
+			return float64(tv.GetUintVal()), true
+		case *gnmi.TypedValue_BoolVal:
+			if tv.GetBoolVal() {
+				return 1, true
+			} else {
+				return 0, false
+			}
+		case *gnmi.TypedValue_FloatVal:
+			return float64(tv.GetFloatVal()), true
+		case *gnmi.TypedValue_LeaflistVal:
+			return 0, false
+		case *gnmi.TypedValue_BytesVal:
+			return 0, false
+		default:
+			return 0, false
+		}
+	}
+	return 0, false
+}

@@ -7,9 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"path"
-
-	statsd "github.com/etsy/statsd/examples/go"
+	"github.com/cactus/go-statsd-client/v5/statsd"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
@@ -23,17 +21,10 @@ const Name = "statsd"
 var _ exporters.Exporter = new(StatsdExporter)
 
 type Metric struct {
-	Timestamp  time.Time `json:"time"`
-	MetricData Data      `json:"data"`
-}
-type Data struct {
-	Base BaseData `json:"baseData"`
-}
-type BaseData struct {
-	Measurement string                   `json:"metric"`
-	Namespace   string                   `json:"namespace"`
-	DimNames    []string                 `json:"dimNames"`
-	Series      []map[string]interface{} `json:"series"`
+	Measurement string            `json:"Metric"`
+	Namespace   string            `json:"Namespace"`
+	Dims        map[string]string `json:"Dims"`
+	Value       interface{}
 }
 
 type Point struct {
@@ -46,7 +37,6 @@ func init() {
 }
 
 func NewStatsdExporter(config *configuration.GatewayConfig) exporters.Exporter {
-
 	return &StatsdExporter{
 		config: config,
 	}
@@ -55,7 +45,7 @@ func NewStatsdExporter(config *configuration.GatewayConfig) exporters.Exporter {
 type StatsdExporter struct {
 	config  *configuration.GatewayConfig
 	connMgr *connections.ConnectionManager
-	client  *statsd.StatsdClient
+	client  statsd.Statter
 }
 
 func (e *StatsdExporter) Name() string {
@@ -65,41 +55,30 @@ func (e *StatsdExporter) Name() string {
 func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 	notification := leaf.Value().(*gnmipb.Notification)
 
-	point := Point{
-		Fields: make(map[string]interface{}),
-	}
-
-	baseData := BaseData{}
-
-	timestamp := time.Unix(0, notification.Timestamp)
-	beforeLimit := (time.Now()).Add(-30 * time.Minute)
-	afterLimit := (time.Now()).Add(4 * time.Minute)
-
-	if timestamp.Before(beforeLimit) || timestamp.After(afterLimit) {
-		return
-	}
-
-	metric := Metric{
-		Timestamp: timestamp,
-	}
-
-	var deviceName string
-	var rackName string
-	var fabricName string
-
-	// foundNumeric := false
-
 	for _, update := range notification.Update {
-		var name string
-
-		value, isNumber := utils.GetNumberValues(update.Val)
-
-		if !isNumber {
-			// TODO: Set statsd data type accordingly or something
-			// continue
+		point := Point{
+			Fields: make(map[string]interface{}),
 		}
 
-		// foundNumeric = true
+		metric := Metric{}
+
+		timestamp := time.Unix(0, notification.Timestamp)
+		beforeLimit := (time.Now()).Add(-30 * time.Minute)
+		afterLimit := (time.Now()).Add(4 * time.Minute)
+
+		if timestamp.Before(beforeLimit) || timestamp.After(afterLimit) {
+			return
+		}
+
+		var name string
+
+		value, valid := utils.GetValues(update.Val)
+
+		if !valid {
+			continue
+		}
+
+		metric.Value = value
 
 		elems, keys, err := extractPrefixAndPathKeys(notification.GetPrefix(), update.GetPath())
 		if err != nil {
@@ -108,7 +87,7 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 
 		name, elems = elems[len(elems)-1], elems[:len(elems)-1]
 
-		if baseData.Measurement == "" {
+		if metric.Measurement == "" {
 			measurementPath := strings.Join(elems, "/")
 
 			p := notification.GetPrefix()
@@ -124,46 +103,21 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 				keys["target"] = target
 			}
 
-			baseData.Measurement = pathToMetricName(measurementPath)
+			metric.Measurement = pathToMetricName(measurementPath)
 
 			point.Tags = keys
 
 			targetConfig, found := (*e.connMgr).GetTargetConfig(point.Tags["target"])
 
 			if found {
-
-				deviceID, exists := targetConfig.Meta["deviceID"]
-				if exists {
-					point.Tags["deviceID"] = deviceID
-					deviceName = path.Base(deviceID)
-				} else {
-					e.config.Log.Error().Msg("Device ARM ID is not set in the metadata of device" + point.Tags["target"])
-					return
-				}
-
-				rackID, exists := targetConfig.Meta["rackID"]
-				if exists {
-					point.Tags["rackID"] = rackID
-					rackName = path.Base(rackID)
-				} else {
-					e.config.Log.Error().Msg("Rack ARM ID is not set in the metadata of device" + point.Tags["target"])
-					return
-				}
-
-				fabricID, exists := targetConfig.Meta["fabricID"]
-				if exists {
-					point.Tags["fabricID"] = fabricID
-					fabricName = path.Base(fabricID)
-				} else {
-					e.config.Log.Error().Msg("Fabric ARM ID is not set in the metadata of device" + point.Tags["target"])
-					return
-				}
-
-				extensionID, exists := targetConfig.Meta["extensionID"]
-				if !exists {
-					point.Tags["extensionID"] = extensionID
-					e.config.Log.Error().Msg("Cluster Extension ID is not set in the metadata of device" + point.Tags["target"])
-					return
+				for _, fieldName := range e.config.ExporterMetadataAllowlist {
+					fieldVal, exists := targetConfig.Meta[fieldName]
+					if exists {
+						point.Tags[fieldName] = fieldVal
+					} else {
+						e.config.Log.Error().Msg("Field " + fieldName + " is not set for device " + point.Tags["target"] + " but is listed in the exporter's Metadata allow-list")
+						return
+					}
 				}
 
 			} else {
@@ -173,85 +127,97 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		point.Fields[pathToMetricName(name)] = value
-	}
 
-	// if !foundNumeric {
-	// 	e.config.Log.Debug().Msg("No numeric values found in notification updates. Skipping...")
-	// 	return
-	// }
-
-	if baseData.Measurement == "" {
-		e.config.Log.Info().Msg("Point measurement is empty. Returning.")
-		return
-	}
-
-	dimNames := []string{"fabricID", "rackID", "deviceID"}
-	tagKeys := make([]string, 0, len(point.Tags))
-	tagVals := make([]string, 0, len(point.Tags))
-	for k, v := range point.Tags {
-		tagKeys = append(tagKeys, k)
-		tagVals = append(tagVals, v)
-	}
-	dimNames = append(baseData.DimNames, tagKeys...)
-
-	dimValues := []string{}
-	dimValues = append(dimValues, tagVals...)
-
-	dimNames = append(dimNames, []string{"fabricName", "rackName", "deviceName"}...)
-	dimValues = append(dimValues, []string{fabricName, rackName, deviceName}...)
-
-	baseData.DimNames = dimNames
-
-	value := make(map[string]interface{})
-
-	value["dimValues"] = dimValues
-
-	for k, v := range point.Fields {
-		value[k] = v
-		switch v.(type) {
-		case int, float64, float32:
-			value["min"] = v
-			value["max"] = v
-			value["sum"] = v
-		default:
-			e.config.Log.Error().Msg("Received metric field with non-numeric type")
+		// this was outside first
+		if metric.Measurement == "" {
+			e.config.Log.Info().Msg("Point measurement is empty. Returning.")
 			return
 		}
 
+		// dimNames := []string{}
+		// dimValues := []string{}
+
+		// for k, v := range point.Tags {
+		// 	dimNames = append(dimNames, k)
+		// 	dimValues = append(dimValues, v)
+		// }
+
+		metric.Dims = point.Tags
+
+		//metricValue := make(map[string]interface{})
+
+		//metricValue["dimValues"] = dimValues
+
+		// for k, v := range point.Fields {
+		// 	metricValue[k] = v
+		// 	switch v.(type) {
+		// 	case int, float64, float32:
+		// 		metricValue["min"] = v
+		// 		metricValue["max"] = v
+		// 		metricValue["sum"] = v
+		// 	default:
+		// 		e.config.Log.Error().Msg("Received metric field with non-numeric type")
+		// 		return
+		// 	}
+
+		// }
+		// metricValue["count"] = 1
+
+		//metric.Value = 0
+
+		metric.Namespace = "Interface metrics"
+
+		metricJSON, err := json.Marshal(metric)
+
+		if err != nil {
+			e.config.Log.Error().Msg("Failed to marshal point into JSON")
+			return
+		}
+
+		// e.config.Log.Info().Msg(string(metricJSON))
+
+		if err != nil {
+			e.config.Log.Error().Msg(err.Error())
+			return
+		}
+
+		switch metric.Value.(type) {
+		case int64:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int64)), 1); err != nil {
+				e.config.Log.Error().Msg(err.Error())
+			}
+		case int32:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int32)), 1); err != nil {
+				e.config.Log.Error().Msg(err.Error())
+			}
+		case float64:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float64)), 1); err != nil {
+				e.config.Log.Error().Msg(err.Error())
+			}
+		case float32:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float32)), 1); err != nil {
+				e.config.Log.Error().Msg(err.Error())
+			}
+		case string:
+			if err := e.client.Set(string(metricJSON), string(metric.Value.(string)), 1); err != nil {
+				e.config.Log.Error().Msg(err.Error())
+			}
+		}
 	}
-	value["count"] = 1
-
-	baseData.Series = append(baseData.Series, value)
-
-	baseData.Namespace = "Interface metrics"
-
-	metric.MetricData.Base = baseData
-
-	metricJSON, err := json.Marshal(metric)
-
-	if err != nil {
-		e.config.Log.Error().Msg("Failed to marshal point into JSON")
-		return
-	}
-
-	e.config.Log.Info().Msg(string(metricJSON))
-
-	if err != nil {
-		e.config.Log.Error().Msg(err.Error())
-		return
-	}
-
-	// TODO: send metric
-	// metricMap := make(map[string]string)
-	// metricMap[string(metricJSON)]
-	// e.client.Send(, 0)
 }
 
 func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
-	e.connMgr = connMgr
-	// TODO: add flags for statsd connection
-	e.client = statsd.New("127.0.0.1", 8125)
+
 	e.config.Log.Info().Msg("Starting Statsd exporter.")
+
+	e.connMgr = connMgr
+
+	var err error
+	e.client, err = statsd.NewClient(e.config.Exporters.StatsdHost, "")
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

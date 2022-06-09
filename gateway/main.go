@@ -108,6 +108,10 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	flag.StringVar(&config.Exporters.InfluxDBBucket, "ExportersInfluxDBBucket", "", "Sets the InfluxDB bucket name")
 	flag.UintVar(&config.Exporters.InfluxDBBatchSize, "ExportersInfluxDBBatchSize", 20, "Sets the writer batch size for InfluxDB records (default is 20")
 
+	exporterMetadataAllowlist := flag.String("ExportersMetadataAllowlist", "", "Comma separated (no spaces) list of metadata fields to include in notifications")
+
+	flag.StringVar(&config.Exporters.StatsdHost, "ExportersStatsdHost", "", "Statsd exporter host including port")
+
 	flag.Uint64Var(&config.GatewayTransitionBufferSize, "GatewayTransitionBufferSize", 100000, "Tunes the size of the buffer between targets and exporters/clients")
 	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")
 	flag.StringVar(&config.OpenConfigDirectory, "OpenConfigDirectory", "", "Directory (required to enable Prometheus exporter)")
@@ -141,6 +145,8 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 	flag.Parse()
 	config.Exporters.Enabled = cleanSplit(*exporters)
 	config.Exporters.KafkaBrokers = cleanSplit(*exporterKafkaBrokers)
+	config.ExporterMetadataAllowlist = cleanSplit(*exporterMetadataAllowlist)
+
 	config.TargetLoaders.Enabled = cleanSplit(*targetLoaders)
 	config.TargetLoaders.NetBoxSubscribePaths = cleanSplit(*netboxSubscribePaths)
 	config.ZookeeperHosts = cleanSplit(*zkHosts)

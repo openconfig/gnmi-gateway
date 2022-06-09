@@ -30,6 +30,7 @@ require (
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/cactus/go-statsd-client/v5 v5.0.0
 	github.com/cenkalti/backoff/v4 v4.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/deepmap/oapi-codegen v1.3.13 // indirect
