@@ -385,12 +385,3 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 
 	return configs, nil
 }
-
-func getRequestTargetName(targets map[string]*targetpb.Target, requestName string) (string, bool) {
-	for target, config := range targets {
-		if config.Request == requestName {
-			return target, true
-		}
-	}
-	return "", false
-}
