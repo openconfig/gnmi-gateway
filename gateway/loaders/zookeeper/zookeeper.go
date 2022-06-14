@@ -44,7 +44,7 @@ type RequestConfig struct {
 	//                                 value change.
 	// 2: SubscriptionMode_SAMPLE - The target samples values according to the
 	//                              interval.
-	Mode   gnmi.SubscriptionMode `yaml:"mode"`
+	Mode gnmi.SubscriptionMode `yaml:"mode"`
 	// ns between samples in SAMPLE mode.
 	SampleInterval uint64 `yaml:"sampleInterval"`
 	// Indicates whether values that have not changed should be sent in a SAMPLE
@@ -60,7 +60,6 @@ type RequestConfig struct {
 	// current state. For ONCE and POLL modes, this causes the server to send only
 	// the sync message (Sec. 3.5.2.3).
 	UpdatesOnly bool `yaml:"updatesOnly"`
-
 }
 
 type TargetConfig struct {
@@ -280,6 +279,10 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 	}
 
 	for connName, conn := range t.Connection {
+		if err := ValidateConnection(&conn); err != nil {
+			z.config.Log.Error().Msgf("Discarding configuration for target "+connName+": ", err)
+			continue
+		}
 		configs.Target[connName] = &targetpb.Target{
 			Addresses: conn.Addresses,
 			Request:   connName,
@@ -310,9 +313,9 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 				path.Origin = origin
 			}
 			subs = append(subs, &gnmi.Subscription{
-				Path: path,
-				Mode: request.Mode,
-				SampleInterval: request.SampleInterval,
+				Path:              path,
+				Mode:              request.Mode,
+				SampleInterval:    request.SampleInterval,
 				SuppressRedundant: request.SuppressRedundant,
 				HeartbeatInterval: request.HeartbeatInterval,
 			})
@@ -322,7 +325,7 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 			// TODO: consider adding a helper
 			if match, _ := filepath.Match(request.Target, targetName); match {
 				found = true
-				z.config.Log.Info().Msgf("Updating target subscription. " +
+				z.config.Log.Info().Msgf("Updating target subscription. "+
 					"Target: %s. Request: %s. Request target pattern: %s.",
 					targetName, requestName, request.Target)
 
@@ -369,8 +372,8 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 						subs...,
 					)
 				}
-				z.config.Log.Info().Msgf("Updated target subscription. " +
-					"Target: %s. Request: %s. Request target pattern: %s. " +
+				z.config.Log.Info().Msgf("Updated target subscription. "+
+					"Target: %s. Request: %s. Request target pattern: %s. "+
 					"Subscription count: %d, subscriptions: %v",
 					targetName, requestName, request.Target,
 					len(configs.Request[targetName].GetSubscribe().Subscription),
