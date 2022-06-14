@@ -163,3 +163,7 @@ func GetValues(tv *gnmi.TypedValue) (interface{}, bool) {
 	}
 	return 0, false
 }
+
+func IsWildcardTarget(target string) bool {
+	return strings.Contains(target, "*")
+}

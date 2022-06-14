@@ -16,6 +16,7 @@
 package connections
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,6 +100,10 @@ func (c *ZookeeperConnectionManager) Forwardable(target string) bool {
 		}
 
 		if conn.queryTarget == target || conn.Seen(target) {
+			return true
+		}
+
+		if match, _ := filepath.Match(target, conn.queryTarget); match {
 			return true
 		}
 	}
