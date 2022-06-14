@@ -346,7 +346,8 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 				// requests by merging "ce_metrics" and "ce_events", one for
 				// each of the "ce1" and "ce2" targets.
 				var targetRequest *gnmi.SubscribeRequest
-				if targetRequest, found = configs.Request[targetName]; !found {
+				var foundSub bool
+				if targetRequest, foundSub = configs.Request[targetName]; !foundSub {
 					targetRequest = &gnmi.SubscribeRequest{
 						Request: &gnmi.SubscribeRequest_Subscribe{
 							Subscribe: &gnmi.SubscriptionList{
@@ -383,13 +384,4 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 	}
 
 	return configs, nil
-}
-
-func getRequestTargetName(targets map[string]*targetpb.Target, requestName string) (string, bool) {
-	for target, config := range targets {
-		if config.Request == requestName {
-			return target, true
-		}
-	}
-	return "", false
 }
