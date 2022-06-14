@@ -111,6 +111,9 @@ type GatewayConfig struct {
 	// EnableClustering will dictate if you want clustering turned on
 	// or just having zookeeper hosts for target loading
 	EnableClustering bool `json:"enable_clustering"`
+	// ExporterMetadataAllowlist will tell the exporter which metadata to include
+	// in the gnmi notification before exporting the metric
+	ExporterMetadataAllowlist []string `json:"exporter_metadata_allowlist"`
 }
 
 type ExportersConfig struct {
@@ -147,6 +150,9 @@ type ExportersConfig struct {
 	// InfluxDBBatchSize the number of lines or individual data points in a
 	// line protocol batch.
 	InfluxDBBatchSize uint `json:"influxdb_batch_size"`
+
+	// StatsdHost is the target address for the statsd exporter
+	StatsdHost string `json:"statsd_host"`
 }
 
 type TargetLoadersConfig struct {
