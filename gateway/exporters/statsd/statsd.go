@@ -21,10 +21,11 @@ const Name = "statsd"
 var _ exporters.Exporter = new(StatsdExporter)
 
 type Metric struct {
+	Account     string            `json:"Account"`
 	Measurement string            `json:"Metric"`
 	Namespace   string            `json:"Namespace"`
 	Dims        map[string]string `json:"Dims"`
-	Value       interface{}
+	Value       interface{}       `json:"-"`
 }
 
 type Point struct {
@@ -128,42 +129,14 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 
 		point.Fields[pathToMetricName(name)] = value
 
-		// this was outside first
 		if metric.Measurement == "" {
 			e.config.Log.Info().Msg("Point measurement is empty. Returning.")
 			return
 		}
 
-		// dimNames := []string{}
-		// dimValues := []string{}
-
-		// for k, v := range point.Tags {
-		// 	dimNames = append(dimNames, k)
-		// 	dimValues = append(dimValues, v)
-		// }
-
 		metric.Dims = point.Tags
-
-		//metricValue := make(map[string]interface{})
-
-		//metricValue["dimValues"] = dimValues
-
-		// for k, v := range point.Fields {
-		// 	metricValue[k] = v
-		// 	switch v.(type) {
-		// 	case int, float64, float32:
-		// 		metricValue["min"] = v
-		// 		metricValue["max"] = v
-		// 		metricValue["sum"] = v
-		// 	default:
-		// 		e.config.Log.Error().Msg("Received metric field with non-numeric type")
-		// 		return
-		// 	}
-
-		// }
-		// metricValue["count"] = 1
-
-		//metric.Value = 0
+		metric.Account = metric.Dims["Account"]
+		delete(metric.Dims, "Account")
 
 		metric.Namespace = "Interface metrics"
 
