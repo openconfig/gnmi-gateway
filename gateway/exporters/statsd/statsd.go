@@ -1,4 +1,4 @@
-package Statsd
+package statsd
 
 import (
 	"encoding/json"
