@@ -71,12 +71,6 @@ func TestStatsdExporter_Export(t *testing.T) {
 	}
 	config.ExporterMetadataAllowlist = []string{"Account"}
 
-	//statsdClient, err := statsd.NewClient(serverAddress, "")
-
-	// if err != nil {
-	// 	panic("Failed to create statsd client")
-	// }
-
 	var connMgr connections.ConnectionManager
 
 	zkConn, _, err := zk.Connect(config.ZookeeperHosts, config.ZookeeperTimeout)
