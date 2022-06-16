@@ -170,7 +170,7 @@ func createPath(conn *zk.Conn, parts []string, acl []zk.ACL) error {
 		if err != nil {
 			return err
 		}
-		if exists == true {
+		if exists {
 			continue
 		}
 		_, err = conn.Create(pth, []byte{}, 0, acl)
@@ -192,6 +192,185 @@ func ValidateConnection(c *ConnectionConfig) error {
 	}
 	if len(c.Addresses) == 0 {
 		return fmt.Errorf("target missing address")
+	}
+
+	return nil
+}
+
+func (z *ZookeeperClient) AddZookeeperData(t *TargetConfig) error {
+
+	for name, request := range t.Request {
+		requestPath := CleanPath(RequestPath) + CleanPath(name)
+
+		if err := z.createNode(requestPath); err != nil {
+			return err
+		}
+
+		var crtVersion int32
+
+		exists, stat, err := z.conn.Exists(requestPath)
+		if err != nil {
+			return err
+		}
+		if exists {
+			crtVersion = stat.Version
+		} else {
+			crtVersion = 0
+		}
+
+		requestYaml, err := yaml.Marshal(request)
+		if err != nil {
+			return err
+		}
+
+		if err := z.setNodeValue(requestPath, requestYaml, int32(crtVersion)); err != nil {
+			return err
+		}
+	}
+
+	for name, target := range t.Connection {
+		targetPath := CleanPath(TargetPath) + CleanPath(name)
+
+		if err := z.createNode(targetPath); err != nil {
+			return err
+		}
+
+		var crtVersion int32
+
+		exists, stat, err := z.conn.Exists(targetPath)
+		if err != nil {
+			return err
+		}
+		if exists {
+			crtVersion = stat.Version
+		} else {
+			crtVersion = 0
+		}
+
+		targetYaml, err := yaml.Marshal(target)
+		if err != nil {
+			return err
+		}
+
+		if err := z.setNodeValue(targetPath, targetYaml, int32(crtVersion)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (z *ZookeeperClient) setNodeValue(nodePath string, value []byte, version int32) error {
+	if _, err := z.conn.Set(nodePath, value, version); err != nil {
+		log.Log.Error(err, "Node ", nodePath, " set failed")
+		return err
+	}
+	return nil
+}
+
+func (z *ZookeeperClient) createNode(path string) error {
+	nodePath := CleanPath(path)
+	_, err := z.conn.Create(nodePath, []byte{}, 0, z.acl)
+	switch err {
+	case zk.ErrNoNode:
+		err = CreateParentPath(z.conn, nodePath, z.acl)
+		if err != nil {
+			return fmt.Errorf("unable to create parent path for cluster member registration: %v", err)
+		}
+
+		// Re attempt to add a sequence now that the parent exists
+		_, err = z.conn.Create(nodePath, []byte{}, 0, z.acl)
+		if err != nil {
+			return fmt.Errorf("unable to create registration node after parent path created: %v", err)
+		}
+	case zk.ErrNodeExists:
+		log.Log.Info("Node ", nodePath, " found")
+	case nil:
+		log.Log.Info("Node ", nodePath, " created successfully")
+	default:
+		log.Log.Error(err, "unable to register node ", nodePath, " with Zookeeper")
+		return err
+	}
+
+	return nil
+}
+
+func (z *ZookeeperClient) DeleteZookeeperData(t *TargetConfig) error {
+
+	for name := range t.Request {
+		deletePath := CleanPath(RequestPath) + CleanPath(name)
+		if err := z.conn.Delete(deletePath, 0); err != nil {
+			return err
+		}
+	}
+
+	for name := range t.Connection {
+		deletePath := CleanPath(TargetPath) + CleanPath(name)
+		if err := z.conn.Delete(deletePath, 0); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (z *ZookeeperClient) Wipe() error {
+	targets, _, err := z.conn.Children(CleanPath(TargetPath))
+	if err != nil {
+		return err
+	}
+
+	for i := range targets {
+		deletePath := CleanPath(TargetPath) + CleanPath(targets[i])
+
+		var crtVersion int32
+
+		exists, stat, err := z.conn.Exists(deletePath)
+		if err != nil {
+			return err
+		}
+		if exists {
+			crtVersion = stat.Version
+		} else {
+			crtVersion = 0
+		}
+
+		if err := z.conn.Delete(deletePath, crtVersion); err != nil {
+			return err
+		}
+	}
+
+	requests, _, err := z.conn.Children(CleanPath(RequestPath))
+	if err != nil {
+		return err
+	}
+
+	for i := range requests {
+		deletePath := CleanPath(RequestPath) + CleanPath(requests[i])
+
+		var crtVersion int32
+
+		exists, stat, err := z.conn.Exists(deletePath)
+		if err != nil {
+			return err
+		}
+		if exists {
+			crtVersion = stat.Version
+		} else {
+			crtVersion = 0
+		}
+
+		if err := z.conn.Delete(deletePath, crtVersion); err != nil {
+			return err
+		}
+	}
+
+	if err := z.conn.Delete(TargetPath, 0); err != nil {
+		return err
+	}
+
+	if err := z.conn.Delete(RequestPath, 0); err != nil {
+		return err
 	}
 
 	return nil
