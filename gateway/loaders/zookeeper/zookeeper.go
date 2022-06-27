@@ -99,30 +99,16 @@ func NewZookeeperTargetLoader(config *configuration.GatewayConfig) loaders.Targe
 
 func (z *ZookeeperTargetLoader) GetConfiguration() (*targetpb.Configuration, error) {
 	data, err := z.zkClient.GetZookeeperData(z.config.Log)
-	switch err {
-	case zk.ErrNoNode:
-		configs := &targetpb.Configuration{}
-		z.config.Log.Info().Msg("Could not parse zookeeper configuration: " + err.Error())
-		if exists, _, _ := z.zkClient.conn.Exists(CleanPath(TargetPath)); !exists {
-			z.config.Log.Info().Msg("Creating path: " + TargetPath)
-			if err := CreateFullPath(z.zkClient.conn, TargetPath, zk.WorldACL(zk.PermAll)); err != nil {
-				return nil, err
-			}
-		}
-		if exists, _, _ := z.zkClient.conn.Exists(CleanPath(RequestPath)); !exists {
-			z.config.Log.Info().Msg("Creating path: " + RequestPath)
-			if err := CreateFullPath(z.zkClient.conn, RequestPath, zk.WorldACL(zk.PermAll)); err != nil {
-				return nil, err
-			}
-		}
-		return configs, nil
-	case nil:
-		z.config.Log.Info().Msg("Successfuly retreived zookeeper configuration")
-	default:
+
+	if err != nil {
 		return nil, err
 	}
 
 	configs, err := z.zookeeperToTargets(data)
+
+	if err != nil {
+		return nil, err
+	}
 
 	if err := target.Validate(configs); err != nil {
 		return nil, fmt.Errorf("configuration in zookeeper is invalid: %v", err)
@@ -136,6 +122,7 @@ func (z *ZookeeperTargetLoader) refreshTargetConfiguration(targetChan chan<- *co
 
 	if err != nil {
 		z.config.Log.Error().Err(err).Msgf("Unable to get target configuration.")
+		return err
 	} else {
 		controlMsg := new(connections.TargetConnectionControl)
 		if z.last != nil {
@@ -164,13 +151,19 @@ func buildEventChanArray(channelMap map[string]<-chan zk.Event) []<-chan zk.Even
 
 func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connections.TargetConnectionControl) error {
 	channelMap := make(map[string]<-chan zk.Event)
+	var childrenPaths []string
+	var zkChildrenEvents <-chan zk.Event
+	var err error
 
 	z.config.Log.Info().Msgf("[ZK] Starting zookeeper target monitoring")
 	if err := z.refreshTargetConfiguration(targetChan); err != nil {
 		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh targets")
+		if err == zk.ErrConnectionClosed {
+			goto Exit
+		}
 	}
 
-	childrenPaths, _, zkChildrenEvents, err := z.zkClient.conn.ChildrenW(TargetPath)
+	childrenPaths, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(TargetPath)
 	if err != nil {
 		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", TargetPath)
 		return err
@@ -220,12 +213,18 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 			z.config.Log.Info().Msgf("[ZK] Received children event: %s at %s", event.Type.String(), event.Path)
 			if err := z.refreshTargetConfiguration(targetChan); err != nil {
 				z.config.Log.Error().Err(err).Msgf("Unable to refresh target at path: '%s' - '%s'", event.Path, err)
+				if err == zk.ErrConnectionClosed {
+					goto Exit
+				}
 			}
 
 			childrenPaths, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(TargetPath)
 
 			if err != nil {
 				z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", TargetPath)
+				if err == zk.ErrConnectionClosed {
+					goto Exit
+				}
 				return err
 			}
 
@@ -255,6 +254,9 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 
 			if err := z.refreshTargetConfiguration(targetChan); err != nil {
 				z.config.Log.Error().Err(err).Msgf("Unable to refresh target at path: '%s' - '%s'", event.Path, err)
+				if err == zk.ErrConnectionClosed {
+					goto Exit
+				}
 			}
 
 			z.config.Log.Info().Msgf("[ZK] Edited configuration from zNode at path: %s/", event.Path)
@@ -269,6 +271,9 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 			z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for: %s", event.Path)
 		}
 	}
+Exit:
+	fmt.Println("Zookeeper connection closed")
+	return nil
 }
 
 func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.Configuration, error) {
@@ -387,4 +392,9 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 	}
 
 	return configs, nil
+}
+
+func (z *ZookeeperTargetLoader) Close() error {
+	z.zkClient.conn.Close()
+	return nil
 }

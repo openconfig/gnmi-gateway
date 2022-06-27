@@ -21,50 +21,62 @@ func (z *ZookeeperClient) GetZookeeperData(log zerolog.Logger) (*TargetConfig, e
 	connectionMap := make(map[string]ConnectionConfig)
 	requestMap := make(map[string]RequestConfig)
 
-	zNodes, _, err := z.conn.Children(CleanPath(TargetPath))
-	if err != nil {
-		return nil, err
-	}
-
-	for _, n := range zNodes {
-		c := &ConnectionConfig{}
-
-		crtPath := CleanPath(TargetPath) + CleanPath(n)
-		data, err := z.getNodeValue(crtPath)
+	if exists, _, _ := z.conn.Exists(CleanPath(TargetPath)); exists {
+		zNodes, _, err := z.conn.Children(CleanPath(TargetPath))
 		if err != nil {
 			return nil, err
 		}
 
-		if err := yaml.Unmarshal(data, c); err != nil {
-			log.Error().Err(err).Msgf("Error unmarshalling zNode into yaml: '%s'", crtPath)
-			continue
-		}
+		for _, n := range zNodes {
+			c := &ConnectionConfig{}
 
-		if err := ValidateConnection(c); err != nil {
-			log.Error().Err(err).Msgf("Invalid connection configuration at path: '%s'", crtPath)
-			continue
-		}
+			crtPath := CleanPath(TargetPath) + CleanPath(n)
+			data, err := z.getNodeValue(crtPath)
+			if err != nil {
+				return nil, err
+			}
 
-		connectionMap[n] = *c
+			if err := yaml.Unmarshal(data, c); err != nil {
+				log.Error().Err(err).Msgf("Error unmarshalling zNode into yaml: '%s'", crtPath)
+				continue
+			}
+
+			if err := ValidateConnection(c); err != nil {
+				log.Error().Err(err).Msgf("Invalid connection configuration at path: '%s'", crtPath)
+				continue
+			}
+
+			connectionMap[n] = *c
+		}
+	} else {
+		if err := CreateFullPath(z.conn, TargetPath, zk.WorldACL(zk.PermAll)); err != nil {
+			return nil, err
+		}
 	}
 
-	zNodes, _, err = z.conn.Children(CleanPath(RequestPath))
-	if err != nil {
-		return nil, err
-	}
-
-	for _, n := range zNodes {
-		r := &RequestConfig{}
-		crtPath := CleanPath(RequestPath) + CleanPath(n)
-		data, err := z.getNodeValue(crtPath)
+	if exists, _, _ := z.conn.Exists(CleanPath(RequestPath)); exists {
+		zNodes, _, err := z.conn.Children(CleanPath(RequestPath))
 		if err != nil {
 			return nil, err
 		}
-		if err := yaml.Unmarshal(data, r); err != nil {
-			log.Error().Err(err).Msgf("Invalid request yaml configuration at path: '%s'", crtPath)
-			continue
+
+		for _, n := range zNodes {
+			r := &RequestConfig{}
+			crtPath := CleanPath(RequestPath) + CleanPath(n)
+			data, err := z.getNodeValue(crtPath)
+			if err != nil {
+				return nil, err
+			}
+			if err := yaml.Unmarshal(data, r); err != nil {
+				log.Error().Err(err).Msgf("Invalid request yaml configuration at path: '%s'", crtPath)
+				continue
+			}
+			requestMap[n] = *r
 		}
-		requestMap[n] = *r
+	} else {
+		if err := CreateFullPath(z.conn, RequestPath, zk.WorldACL(zk.PermAll)); err != nil {
+			return nil, err
+		}
 	}
 
 	targetConf := &TargetConfig{
@@ -75,7 +87,6 @@ func (z *ZookeeperClient) GetZookeeperData(log zerolog.Logger) (*TargetConfig, e
 	return targetConf, nil
 }
 
-// TODO implement more options for zookeeper client connection
 func NewZookeeperClient(hosts []string, timeout time.Duration) (*ZookeeperClient, error) {
 	DefaultACLPerms := zk.PermAll
 	z := &ZookeeperClient{
@@ -152,11 +163,6 @@ func CreateParentPath(conn *zk.Conn, path string, acl []zk.ACL) error {
 	return createPath(conn, parts[:len(parts)-1], acl)
 }
 
-func CreatePath(conn *zk.Conn, path string, acl []zk.ACL) error {
-	parts := strings.Split(path, "/")
-	return createPath(conn, parts, acl)
-}
-
 func createPath(conn *zk.Conn, parts []string, acl []zk.ACL) error {
 	pth := ""
 	for _, p := range parts {
@@ -170,7 +176,7 @@ func createPath(conn *zk.Conn, parts []string, acl []zk.ACL) error {
 		if err != nil {
 			return err
 		}
-		if exists == true {
+		if exists {
 			continue
 		}
 		_, err = conn.Create(pth, []byte{}, 0, acl)
@@ -181,17 +187,120 @@ func createPath(conn *zk.Conn, parts []string, acl []zk.ACL) error {
 	return nil
 }
 
-func GetLeafName(path string) string {
-	parts := strings.Split(path, "/")
-	return parts[len(parts)-1]
-}
-
 func ValidateConnection(c *ConnectionConfig) error {
 	if c == nil {
 		return fmt.Errorf("missing target configuration")
 	}
 	if len(c.Addresses) == 0 {
 		return fmt.Errorf("target missing address")
+	}
+
+	return nil
+}
+
+func (z *ZookeeperClient) AddZookeeperData(t *TargetConfig) error {
+
+	for name, request := range t.Request {
+		requestPath := CleanPath(RequestPath) + CleanPath(name)
+
+		if err := z.createNode(requestPath); err != nil {
+			return err
+		}
+
+		var crtVersion int32
+
+		exists, stat, err := z.conn.Exists(requestPath)
+		if err != nil {
+			return err
+		}
+		if exists {
+			crtVersion = stat.Version
+		} else {
+			crtVersion = 0
+		}
+
+		requestYaml, err := yaml.Marshal(request)
+		if err != nil {
+			return err
+		}
+
+		if err := z.setNodeValue(requestPath, requestYaml, int32(crtVersion)); err != nil {
+			return err
+		}
+	}
+
+	for name, target := range t.Connection {
+		targetPath := CleanPath(TargetPath) + CleanPath(name)
+
+		if err := z.createNode(targetPath); err != nil {
+			return err
+		}
+
+		var crtVersion int32
+
+		exists, stat, err := z.conn.Exists(targetPath)
+		if err != nil {
+			return err
+		}
+		if exists {
+			crtVersion = stat.Version
+		} else {
+			crtVersion = 0
+		}
+
+		targetYaml, err := yaml.Marshal(target)
+		if err != nil {
+			return err
+		}
+
+		if err := z.setNodeValue(targetPath, targetYaml, int32(crtVersion)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (z *ZookeeperClient) setNodeValue(nodePath string, value []byte, version int32) error {
+	if _, err := z.conn.Set(nodePath, value, version); err != nil {
+		log.Log.Error(err, "Node ", nodePath, " set failed")
+		return err
+	}
+	return nil
+}
+
+func (z *ZookeeperClient) createNode(path string) error {
+	nodePath := CleanPath(path)
+	_, err := z.conn.Create(nodePath, []byte{}, 0, z.acl)
+	switch err {
+	case zk.ErrNoNode:
+		err = CreateParentPath(z.conn, nodePath, z.acl)
+		if err != nil {
+			return fmt.Errorf("unable to create parent path for cluster member registration: %v", err)
+		}
+
+		// Re attempt to add a sequence now that the parent exists
+		_, err = z.conn.Create(nodePath, []byte{}, 0, z.acl)
+		if err != nil {
+			return fmt.Errorf("unable to create registration node after parent path created: %v", err)
+		}
+	case zk.ErrNodeExists:
+		log.Log.Info("Node ", nodePath, " found")
+	case nil:
+		log.Log.Info("Node ", nodePath, " created successfully")
+	default:
+		log.Log.Error(err, "unable to register node ", nodePath, " with Zookeeper")
+		return err
+	}
+
+	return nil
+}
+
+func (z *ZookeeperClient) Delete(path string) error {
+	if exists, stat, _ := z.conn.Exists(CleanPath(path)); exists {
+		if err := z.conn.Delete(CleanPath(path), stat.Version); err != nil {
+			return err
+		}
 	}
 
 	return nil
