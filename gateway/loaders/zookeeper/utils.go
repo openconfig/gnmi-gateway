@@ -21,8 +21,8 @@ type ZookeeperClient struct {
 }
 
 func (z *ZookeeperClient) GetZookeeperConfig(log zerolog.Logger, config *configuration.GatewayConfig) error {
-	if exists, _, _ := z.conn.Exists("/certificates/global"); exists {
-		tlsData, err := z.getNodeValue("/certificates/global")
+	if exists, _, _ := z.conn.Exists(GlobalCertPath); exists {
+		tlsData, err := z.getNodeValue(GlobalCertPath)
 		if err != nil {
 			return err
 		}
