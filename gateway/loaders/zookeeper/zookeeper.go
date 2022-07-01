@@ -20,8 +20,16 @@ import (
 // TODO Maybe add config parameters for targets & requests or some prefix
 const TargetPath = "/targets"
 const RequestPath = "/requests"
+const GlobalCertPath = "/certificates/global"
+const CertificatePath = "/certificates"
 
 var _ loaders.TargetLoader = new(ZookeeperTargetLoader)
+
+type CertificateConfig struct {
+	CA   string `yaml:"ca,omitempty"`
+	Cert string `yaml:"cert,omitempty"`
+	Key  string `yaml:"key, omitempty"`
+}
 
 type ConnectionConfig struct {
 	Addresses   []string          `yaml:"addresses"`
@@ -85,6 +93,11 @@ func (z *ZookeeperTargetLoader) Start() error {
 		return err
 	}
 	z.zkClient = zClient
+
+	if err := z.zkClient.GetZookeeperConfig(z.config.Log, z.config); err != nil {
+		return err
+	}
+
 	_, err = z.GetConfiguration() // make sure there are no errors at startup
 	return err
 }
@@ -154,6 +167,7 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 	var childrenPaths []string
 	var zkChildrenEvents <-chan zk.Event
 	var err error
+	var eventChannel <-chan zk.Event
 
 	z.config.Log.Info().Msgf("[ZK] Starting zookeeper target monitoring")
 	if err := z.refreshTargetConfiguration(targetChan); err != nil {
@@ -184,6 +198,25 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 		}
 	}
 
+	// Certificate watch
+	_, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
+	if err != nil {
+		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", CertificatePath)
+		return err
+	}
+	z.config.Log.Info().Msgf("[ZK] Set watch for children of path: %s", CertificatePath)
+
+	channelMap[CertificatePath] = zkChildrenEvents
+
+	_, _, eventChannel, err = z.zkClient.conn.GetW(GlobalCertPath)
+	if err != nil {
+		z.config.Log.Error().Msgf("[ZK] Unable to set watch for global certificate")
+		return err
+	}
+
+	channelMap[GlobalCertPath] = eventChannel
+	z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for global certificate")
+
 	for {
 		eventChannels := buildEventChanArray(channelMap)
 
@@ -211,10 +244,17 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 		case zk.EventNodeChildrenChanged:
 
 			z.config.Log.Info().Msgf("[ZK] Received children event: %s at %s", event.Type.String(), event.Path)
-			if err := z.refreshTargetConfiguration(targetChan); err != nil {
-				z.config.Log.Error().Err(err).Msgf("Unable to refresh target at path: '%s' - '%s'", event.Path, err)
-				if err == zk.ErrConnectionClosed {
-					goto Exit
+
+			if strings.Contains(event.Path, CertificatePath) {
+				if err := z.zkClient.GetZookeeperConfig(z.config.Log, z.config); err != nil {
+					return err
+				}
+			} else {
+				if err := z.refreshTargetConfiguration(targetChan); err != nil {
+					z.config.Log.Error().Err(err).Msgf("Unable to refresh target at path: '%s' - '%s'", event.Path, err)
+					if err == zk.ErrConnectionClosed {
+						goto Exit
+					}
 				}
 			}
 
@@ -252,10 +292,16 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 
 			z.config.Log.Info().Msgf("[ZK] Received data event: %s at path '%s'", event.Type.String(), event.Path)
 
-			if err := z.refreshTargetConfiguration(targetChan); err != nil {
-				z.config.Log.Error().Err(err).Msgf("Unable to refresh target at path: '%s' - '%s'", event.Path, err)
-				if err == zk.ErrConnectionClosed {
-					goto Exit
+			if strings.Contains(event.Path, CertificatePath) {
+				if err := z.zkClient.GetZookeeperConfig(z.config.Log, z.config); err != nil {
+					return err
+				}
+			} else {
+				if err := z.refreshTargetConfiguration(targetChan); err != nil {
+					z.config.Log.Error().Err(err).Msgf("Unable to refresh target at path: '%s' - '%s'", event.Path, err)
+					if err == zk.ErrConnectionClosed {
+						goto Exit
+					}
 				}
 			}
 

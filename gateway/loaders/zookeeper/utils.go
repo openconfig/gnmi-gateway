@@ -1,12 +1,15 @@
 package zookeeper
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-zookeeper/zk"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -15,6 +18,36 @@ import (
 type ZookeeperClient struct {
 	acl  []zk.ACL
 	conn *zk.Conn
+}
+
+func (z *ZookeeperClient) GetZookeeperConfig(log zerolog.Logger, config *configuration.GatewayConfig) error {
+	if exists, _, _ := z.conn.Exists("/certificates/global"); exists {
+		tlsData, err := z.getNodeValue("/certificates/global")
+		if err != nil {
+			return err
+		}
+		certConf := &CertificateConfig{}
+		if err := yaml.Unmarshal(tlsData, certConf); err != nil {
+			return err
+		}
+
+		CA := &x509.Certificate{
+			Raw:  []byte(certConf.CA),
+			IsCA: true,
+		}
+		config.ClientTLSConfig.ClientCAs.AddCert(CA)
+		config.ClientTLSConfig.ClientAuth = tls.RequestClientCert
+		config.ClientTLSConfig.Certificates = []tls.Certificate{
+			{
+				Certificate: [][]byte{
+					[]byte(certConf.Cert),
+				},
+				PrivateKey: certConf.Key,
+			},
+		}
+	}
+
+	return nil
 }
 
 func (z *ZookeeperClient) GetZookeeperData(log zerolog.Logger) (*TargetConfig, error) {
