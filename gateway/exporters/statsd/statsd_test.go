@@ -11,7 +11,6 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/loaders/zookeeper"
 	"github.com/openconfig/gnmi/ctree"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/gnmi/proto/target"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
@@ -26,6 +25,7 @@ var config = &configuration.GatewayConfig{
 		StatsdHost: serverAddress,
 	},
 	ZookeeperHosts:            []string{zookeeperAddress},
+	ZookeeperTimeout:          30 * time.Second,
 	ExporterMetadataAllowlist: []string{"Account"},
 }
 
@@ -38,6 +38,11 @@ func TestStatsdExporter_Name(t *testing.T) {
 }
 
 func TestStatsdExporter_Export(t *testing.T) {
+	if err := createZKTargets(t); err != nil {
+		t.Skip("Could not connect to zookeeper")
+	}
+	// assert.Nil(t, err)
+
 	var connMgr connections.ConnectionManager
 
 	zkConn, _, err := zk.Connect(config.ZookeeperHosts, config.ZookeeperTimeout)
@@ -61,7 +66,7 @@ func TestStatsdExporter_Export(t *testing.T) {
 
 	targetFound := false
 	for attempt := 0; attempt < 10; attempt++ {
-		_, targetFound = connMgr.GetTargetConfig("a")
+		_, targetFound = connMgr.(*connections.ZookeeperConnectionManager).GetTargetConfig("test_target0")
 		if targetFound {
 			break
 		}
@@ -76,6 +81,9 @@ func TestStatsdExporter_Export(t *testing.T) {
 	go testStatsdOutput(t, statsdServerConn)
 
 	assert.NotPanics(t, func() {
+		err = e.Start(&connMgr)
+		assert.Nil(t, err)
+
 		e.Export(ctree.DetachedLeaf(intNotif))
 
 		e.Export(ctree.DetachedLeaf(stringNotif))
@@ -92,7 +100,7 @@ func createStatsdServer() (*net.UDPConn, error) {
 }
 
 func testStatsdOutput(t *testing.T, serverConn *net.UDPConn) {
-	t.Log("hello")
+	// t.Log("hello")
 	buf := make([]byte, 1024)
 	for {
 		n, addr, _ := serverConn.ReadFromUDP(buf)
@@ -100,31 +108,22 @@ func testStatsdOutput(t *testing.T, serverConn *net.UDPConn) {
 	}
 }
 
-func createZKTargets(connMgr *connections.ConnectionManager) {
+func createZKTargets(t *testing.T) error {
 	zkClient, err := zookeeper.NewZookeeperClient(config.ZookeeperHosts, config.ZookeeperTimeout)
 	if err != nil {
-		//TODO Do something
+		t.Skip("Couldn't connect to zookeeper")
+		return err
 	}
 
-	// zkClient.AddZookeeperData()
-	targetChan := (*connMgr).TargetControlChan()
-	targetMap := make(map[string]*target.Target)
-	targetMap["a"] = mockTarget
-	requestMap := make(map[string]*pb.SubscribeRequest)
-	requestMap["default"] = mockRequest
-
-	controlMsg := new(connections.TargetConnectionControl)
-	targetConfig := &target.Configuration{
-		Target:  targetMap,
-		Request: requestMap,
+	if err := zkClient.AddZookeeperData(testTargetConfig); err != nil {
+		return err
 	}
 
-	controlMsg.Insert = targetConfig
-	targetChan <- controlMsg
+	return nil
 }
 
 var intNotif = &pb.Notification{
-	Prefix: &pb.Path{Target: "a", Origin: "b"},
+	Prefix: &pb.Path{Target: "test_target0", Origin: "b"},
 	Update: []*pb.Update{
 		{
 			Path: &pb.Path{
@@ -144,7 +143,7 @@ var intNotif = &pb.Notification{
 }
 
 var stringNotif = &pb.Notification{
-	Prefix: &pb.Path{Target: "a", Origin: "b"},
+	Prefix: &pb.Path{Target: "test_target0", Origin: "b"},
 	Update: []*pb.Update{
 		{
 			Path: &pb.Path{
@@ -159,26 +158,31 @@ var stringNotif = &pb.Notification{
 	Timestamp: time.Now().UTC().UnixNano(),
 }
 
-var mockTarget = &target.Target{
-	Addresses: []string{"127.0.0.1"},
-	Credentials: &target.Credentials{
-		Username: "admin",
-		Password: "admin",
+var testTargetConfig = &zookeeper.TargetConfig{
+	Connection: map[string]zookeeper.ConnectionConfig{
+		"test_target0": {
+			Addresses: []string{"mockIP0"},
+			Meta: map[string]string{
+				"NoTLSVerify": "yes",
+				"Account":     "test",
+			},
+			Credentials: zookeeper.CredentialsConfig{
+				Username: "admin",
+				Password: "admin",
+			},
+		},
 	},
-	Request: "default",
-	Meta: map[string]string{
-		"Account": "AFONFA",
-	},
-}
-
-var mockRequest = &pb.SubscribeRequest{
-	Request: &pb.SubscribeRequest_Subscribe{
-		Subscribe: &pb.SubscriptionList{
-			Prefix: intNotif.GetPrefix(),
-			Subscription: []*pb.Subscription{
-				{
-					Path: intNotif.GetPrefix(),
-				},
+	Request: map[string]zookeeper.RequestConfig{
+		"default": {
+			Target: "*",
+			Paths: []string{
+				"/interfaces",
+			},
+		},
+		"unused": {
+			Target: "*1",
+			Paths: []string{
+				"/components",
 			},
 		},
 	},
