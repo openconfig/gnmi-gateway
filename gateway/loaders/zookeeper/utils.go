@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -20,7 +21,7 @@ type ZookeeperClient struct {
 	conn *zk.Conn
 }
 
-func (z *ZookeeperClient) GetZookeeperConfig(log zerolog.Logger, config *configuration.GatewayConfig) error {
+func (z *ZookeeperClient) refreshZookeeperConfig(log zerolog.Logger, targetChan chan<- *connections.TargetConnectionControl, config *configuration.GatewayConfig) error {
 	if exists, _, _ := z.conn.Exists(GlobalCertPath); exists {
 		tlsData, err := z.getNodeValue(GlobalCertPath)
 		if err != nil {
@@ -35,6 +36,7 @@ func (z *ZookeeperClient) GetZookeeperConfig(log zerolog.Logger, config *configu
 			Raw:  []byte(certConf.CA),
 			IsCA: true,
 		}
+
 		config.ClientTLSConfig.ClientCAs.AddCert(CA)
 		config.ClientTLSConfig.ClientAuth = tls.RequestClientCert
 		config.ClientTLSConfig.Certificates = []tls.Certificate{
@@ -45,6 +47,10 @@ func (z *ZookeeperClient) GetZookeeperConfig(log zerolog.Logger, config *configu
 				PrivateKey: certConf.Key,
 			},
 		}
+
+		controlMsg := new(connections.TargetConnectionControl)
+		controlMsg.ReconnectAll = true
+		targetChan <- controlMsg
 	}
 
 	return nil

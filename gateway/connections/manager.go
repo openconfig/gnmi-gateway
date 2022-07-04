@@ -68,6 +68,8 @@ type TargetConnectionControl struct {
 	Insert *targetpb.Configuration
 	// Remove will remove and disconnect from all of the named targets.
 	Remove []string
+	// ReconnectAll will refresh the connection with all the targets
+	ReconnectAll bool
 }
 
 // InsertCount is the number of targets in the Insert field, if Insert is not nil.

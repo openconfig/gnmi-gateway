@@ -187,6 +187,15 @@ func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectio
 			}
 		}
 	}
+
+	if msg.ReconnectAll {
+		for _, conn := range c.connections {
+			if err := conn.reconnect(); err != nil {
+				c.config.Log.Error().Msgf("Recconect failed for connection: ", err)
+			}
+		}
+	}
+
 	c.connectionsMutex.Unlock()
 }
 
