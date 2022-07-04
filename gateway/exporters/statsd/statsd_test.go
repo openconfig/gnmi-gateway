@@ -9,6 +9,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders/zookeeper"
+	zkLoader "github.com/openconfig/gnmi-gateway/gateway/loaders/zookeeper"
 	"github.com/openconfig/gnmi/ctree"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,9 @@ var config = &configuration.GatewayConfig{
 	ZookeeperHosts:            []string{zookeeperAddress},
 	ZookeeperTimeout:          30 * time.Second,
 	ExporterMetadataAllowlist: []string{"Account"},
+	TargetLoaders: &configuration.TargetLoadersConfig{
+		ZookeeperReloadInterval: 10 * time.Second,
+	},
 }
 
 func TestStatsdExporter_Name(t *testing.T) {
@@ -38,10 +42,66 @@ func TestStatsdExporter_Name(t *testing.T) {
 }
 
 func TestStatsdExporter_Export(t *testing.T) {
-	if err := createZKTargets(t); err != nil {
-		t.Skip("Could not connect to zookeeper")
+
+	connMgr, err := createZKTargets(t)
+	assert.Nil(t, err)
+
+	e := &StatsdExporter{
+		config: config,
 	}
-	// assert.Nil(t, err)
+
+	assert.Nil(t, err)
+
+	done := make(chan bool, 1)
+
+	go func() {
+		statsdServerConn, _ := createStatsdServer()
+		buf := make([]byte, 1024)
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				n, addr, _ := statsdServerConn.ReadFromUDP(buf)
+				t.Log("Received ", string(buf[0:n]), " from ", addr)
+			}
+
+		}
+
+	}()
+	assert.NotPanics(t, func() {
+		err = e.Start(&connMgr)
+		assert.Nil(t, err)
+
+		assert.Nil(t, err)
+
+		e.Export(ctree.DetachedLeaf(intNotif))
+		time.Sleep(1 * time.Second)
+
+		e.Export(ctree.DetachedLeaf(stringNotif))
+	})
+
+	done <- true
+}
+
+func createStatsdServer() (*net.UDPConn, error) {
+	StatsdServer, err := net.ListenUDP("udp", &net.UDPAddr{IP: []byte{0, 0, 0, 0}, Port: 8125, Zone: ""})
+	if err != nil {
+		return nil, err
+	}
+	return StatsdServer, nil
+}
+
+func createZKTargets(t *testing.T) (connections.ConnectionManager, error) {
+	zkClient, err := zkLoader.NewZookeeperClient(config.ZookeeperHosts, config.ZookeeperTimeout)
+	if err != nil {
+		t.Skip("Couldn't connect to zookeeper")
+		return nil, err
+	}
+
+	if err := zkClient.AddZookeeperData(testTargetConfig); err != nil {
+		return nil, err
+	}
 
 	var connMgr connections.ConnectionManager
 
@@ -60,13 +120,18 @@ func TestStatsdExporter_Export(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e := &StatsdExporter{
-		config: config,
-	}
+	loader := zkLoader.NewZookeeperTargetLoader(config)
+
+	err = loader.Start()
+	assert.Nil(t, err)
+	go loader.WatchConfiguration(connMgr.TargetControlChan())
+	assert.Nil(t, err)
 
 	targetFound := false
 	for attempt := 0; attempt < 10; attempt++ {
+
 		_, targetFound = connMgr.(*connections.ZookeeperConnectionManager).GetTargetConfig("test_target0")
+
 		if targetFound {
 			break
 		}
@@ -74,52 +139,7 @@ func TestStatsdExporter_Export(t *testing.T) {
 	}
 	assert.True(t, targetFound)
 
-	statsdServerConn, err := createStatsdServer()
-
-	assert.Nil(t, err)
-
-	go testStatsdOutput(t, statsdServerConn)
-
-	assert.NotPanics(t, func() {
-		err = e.Start(&connMgr)
-		assert.Nil(t, err)
-
-		e.Export(ctree.DetachedLeaf(intNotif))
-
-		e.Export(ctree.DetachedLeaf(stringNotif))
-	})
-
-}
-
-func createStatsdServer() (*net.UDPConn, error) {
-	StatsdServer, err := net.ListenUDP("udp", &net.UDPAddr{IP: []byte{0, 0, 0, 0}, Port: 8125, Zone: ""})
-	if err != nil {
-		return nil, err
-	}
-	return StatsdServer, nil
-}
-
-func testStatsdOutput(t *testing.T, serverConn *net.UDPConn) {
-	// t.Log("hello")
-	buf := make([]byte, 1024)
-	for {
-		n, addr, _ := serverConn.ReadFromUDP(buf)
-		t.Log("Received ", string(buf[0:n]), " from ", addr)
-	}
-}
-
-func createZKTargets(t *testing.T) error {
-	zkClient, err := zookeeper.NewZookeeperClient(config.ZookeeperHosts, config.ZookeeperTimeout)
-	if err != nil {
-		t.Skip("Couldn't connect to zookeeper")
-		return err
-	}
-
-	if err := zkClient.AddZookeeperData(testTargetConfig); err != nil {
-		return err
-	}
-
-	return nil
+	return connMgr, nil
 }
 
 var intNotif = &pb.Notification{
@@ -161,7 +181,7 @@ var stringNotif = &pb.Notification{
 var testTargetConfig = &zookeeper.TargetConfig{
 	Connection: map[string]zookeeper.ConnectionConfig{
 		"test_target0": {
-			Addresses: []string{"mockIP0"},
+			Addresses: []string{"172.17.0.4:6030"},
 			Meta: map[string]string{
 				"NoTLSVerify": "yes",
 				"Account":     "test",
@@ -176,13 +196,13 @@ var testTargetConfig = &zookeeper.TargetConfig{
 		"default": {
 			Target: "*",
 			Paths: []string{
-				"/interfaces",
+				"/components",
 			},
 		},
 		"unused": {
 			Target: "*1",
 			Paths: []string{
-				"/components",
+				"/interfaces",
 			},
 		},
 	},

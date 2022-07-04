@@ -115,10 +115,11 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 					fieldVal, exists := targetConfig.Meta[fieldName]
 					if exists {
 						point.Tags[fieldName] = fieldVal
-					} else {
-						e.config.Log.Error().Msg("Field " + fieldName + " is not set for device " + point.Tags["target"] + " but is listed in the exporter's Metadata allow-list")
-						return
 					}
+					// else {
+					// 	e.config.Log.Error().Msg("Field " + fieldName + " is not set for device " + point.Tags["target"] + " but is listed in the exporter's Metadata allow-list")
+					// 	return
+					// }
 				}
 
 			} else {
@@ -155,24 +156,16 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		switch metric.Value.(type) {
-		case int64:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int64)), 1); err != nil {
+		case gnmipb.TypedValue_IntVal:
+			if err := e.client.Gauge(string(metricJSON), metric.Value.(gnmipb.TypedValue_IntVal).IntVal, 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		case int32:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int32)), 1); err != nil {
+		case gnmipb.TypedValue_FloatVal:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(gnmipb.TypedValue_DoubleVal).DoubleVal), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		case float64:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float64)), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
-		case float32:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float32)), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
-		case string:
-			if err := e.client.Set(string(metricJSON), string(metric.Value.(string)), 1); err != nil {
+		case gnmipb.TypedValue_StringVal:
+			if err := e.client.Set(string(metricJSON), metric.Value.(gnmipb.TypedValue_StringVal).StringVal, 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
 		}
