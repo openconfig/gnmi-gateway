@@ -13,6 +13,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/ctree"
+	"github.com/openconfig/gnmi/proto/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -116,10 +117,6 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 					if exists {
 						point.Tags[fieldName] = fieldVal
 					}
-					// else {
-					// 	e.config.Log.Error().Msg("Field " + fieldName + " is not set for device " + point.Tags["target"] + " but is listed in the exporter's Metadata allow-list")
-					// 	return
-					// }
 				}
 
 			} else {
@@ -156,18 +153,32 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		switch metric.Value.(type) {
-		case gnmipb.TypedValue_IntVal:
-			if err := e.client.Gauge(string(metricJSON), metric.Value.(gnmipb.TypedValue_IntVal).IntVal, 1); err != nil {
+		case int:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int)), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		case gnmipb.TypedValue_FloatVal:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(gnmipb.TypedValue_DoubleVal).DoubleVal), 1); err != nil {
+		case int64:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int64)), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		case gnmipb.TypedValue_StringVal:
-			if err := e.client.Set(string(metricJSON), metric.Value.(gnmipb.TypedValue_StringVal).StringVal, 1); err != nil {
+		case int32:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int32)), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
+		case float64:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float64)), 1); err != nil {
+				e.config.Log.Error().Msg(err.Error())
+			}
+		case float32:
+			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float32)), 1); err != nil {
+				e.config.Log.Error().Msg(err.Error())
+			}
+		case *gnmi.TypedValue_StringVal:
+			if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
+				e.config.Log.Error().Msg(err.Error())
+			}
+		default:
+			e.config.Log.Info().Msgf("Received metric value: %v of type %T", metric.Value, metric.Value)
 		}
 	}
 }

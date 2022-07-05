@@ -2,6 +2,8 @@ package statsd
 
 import (
 	"net"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	zkLoader "github.com/openconfig/gnmi-gateway/gateway/loaders/zookeeper"
 	"github.com/openconfig/gnmi/ctree"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
@@ -31,6 +34,14 @@ var config = &configuration.GatewayConfig{
 	TargetLoaders: &configuration.TargetLoadersConfig{
 		ZookeeperReloadInterval: 10 * time.Second,
 	},
+	TargetLimit:      100,
+	EnableClustering: false,
+	Log:              zerolog.New(os.Stderr).With().Timestamp().Logger().Level(zerolog.DebugLevel),
+}
+
+type MutexStringSlice struct {
+	mu sync.Mutex
+	s  []string
 }
 
 func TestStatsdExporter_Name(t *testing.T) {
@@ -53,8 +64,13 @@ func TestStatsdExporter_Export(t *testing.T) {
 	assert.Nil(t, err)
 
 	done := make(chan bool, 1)
+	output := &MutexStringSlice{
+		s: []string{},
+	}
 
 	go func() {
+		output.mu.Lock()
+		defer output.mu.Unlock()
 		statsdServerConn, _ := createStatsdServer()
 		buf := make([]byte, 1024)
 		for {
@@ -62,12 +78,10 @@ func TestStatsdExporter_Export(t *testing.T) {
 			case <-done:
 				return
 			default:
-				n, addr, _ := statsdServerConn.ReadFromUDP(buf)
-				t.Log("Received ", string(buf[0:n]), " from ", addr)
+				n, _, _ := statsdServerConn.ReadFromUDP(buf)
+				output.s = append(output.s, string(buf[0:n]))
 			}
-
 		}
-
 	}()
 	assert.NotPanics(t, func() {
 		err = e.Start(&connMgr)
@@ -82,6 +96,11 @@ func TestStatsdExporter_Export(t *testing.T) {
 	})
 
 	done <- true
+
+	time.Sleep(100 * time.Millisecond)
+	for _, out := range output.s {
+		t.Log("Received " + out)
+	}
 }
 
 func createStatsdServer() (*net.UDPConn, error) {
@@ -149,10 +168,13 @@ var intNotif = &pb.Notification{
 			Path: &pb.Path{
 				Elem: []*pb.PathElem{
 					{
-						Name: "test",
+						Name: "path0",
 						Key: map[string]string{
 							"testKey": "testVal",
 						},
+					},
+					{
+						Name: "path1",
 					},
 				},
 			},
