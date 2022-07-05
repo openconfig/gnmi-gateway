@@ -145,40 +145,22 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 			return
 		}
 
-		// e.config.Log.Info().Msg(string(metricJSON))
-
 		if err != nil {
 			e.config.Log.Error().Msg(err.Error())
 			return
 		}
 
-		switch metric.Value.(type) {
-		case int:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int)), 1); err != nil {
+		val, isNumericValue := utils.GetNumberValues(update.Val)
+		if isNumericValue {
+			if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		case int64:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int64)), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
-		case int32:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int32)), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
-		case float64:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float64)), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
-		case float32:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float32)), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
-		case *gnmi.TypedValue_StringVal:
+		} else if valType := fmt.Sprintf("%T", metric.Value); valType == "*gnmi.TypedValue_StringVal" {
 			if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		default:
-			e.config.Log.Info().Msgf("Received metric value: %v of type %T", metric.Value, metric.Value)
+		} else {
+			e.config.Log.Info().Msgf("Received metric of type: %s", valType)
 		}
 	}
 }
