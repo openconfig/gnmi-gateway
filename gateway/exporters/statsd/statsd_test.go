@@ -22,13 +22,11 @@ import (
 
 var _ exporters.Exporter = new(StatsdExporter)
 var serverAddress = "127.0.0.1:8125"
-var zookeeperAddress = "172.17.0.2:2181"
 
 var config = &configuration.GatewayConfig{
 	Exporters: &configuration.ExportersConfig{
 		StatsdHost: serverAddress,
 	},
-	ZookeeperHosts:            []string{zookeeperAddress},
 	ZookeeperTimeout:          30 * time.Second,
 	ExporterMetadataAllowlist: []string{"Account"},
 	TargetLoaders: &configuration.TargetLoadersConfig{
@@ -54,6 +52,7 @@ func TestStatsdExporter_Name(t *testing.T) {
 
 func TestStatsdExporter_Export(t *testing.T) {
 
+	config.ZookeeperHosts = []string{os.Getenv("ZOOKEEPER_HOSTS")}
 	connMgr, err := createZKTargets(t)
 	assert.Nil(t, err)
 
@@ -87,20 +86,20 @@ func TestStatsdExporter_Export(t *testing.T) {
 		err = e.Start(&connMgr)
 		assert.Nil(t, err)
 
-		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
 
 		e.Export(ctree.DetachedLeaf(intNotif))
-		time.Sleep(1 * time.Second)
+		time.Sleep(50 * time.Millisecond)
 
 		e.Export(ctree.DetachedLeaf(stringNotif))
+		time.Sleep(50 * time.Millisecond)
+
 	})
 
 	done <- true
 
-	time.Sleep(100 * time.Millisecond)
-	for _, out := range output.s {
-		t.Log("Received " + out)
-	}
+	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Interface metrics\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\",\"testKey\":\"testVal\"}}:1|g")
+	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Interface metrics\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\"}}:test|s")
 }
 
 func createStatsdServer() (*net.UDPConn, error) {
