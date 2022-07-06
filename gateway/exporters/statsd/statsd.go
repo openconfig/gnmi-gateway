@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/ctree"
+	"github.com/openconfig/gnmi/proto/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -115,9 +117,6 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 					fieldVal, exists := targetConfig.Meta[fieldName]
 					if exists {
 						point.Tags[fieldName] = fieldVal
-					} else {
-						e.config.Log.Error().Msg("Field " + fieldName + " is not set for device " + point.Tags["target"] + " but is listed in the exporter's Metadata allow-list")
-						return
 					}
 				}
 
@@ -147,34 +146,22 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 			return
 		}
 
-		// e.config.Log.Info().Msg(string(metricJSON))
-
 		if err != nil {
 			e.config.Log.Error().Msg(err.Error())
 			return
 		}
 
-		switch metric.Value.(type) {
-		case int64:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int64)), 1); err != nil {
+		val, isNumericValue := utils.GetNumberValues(update.Val)
+		if isNumericValue {
+			if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		case int32:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(int32)), 1); err != nil {
+		} else if reflect.TypeOf(metric.Value) == reflect.TypeOf((*gnmi.TypedValue_StringVal)(nil)) {
+			if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		case float64:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float64)), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
-		case float32:
-			if err := e.client.Gauge(string(metricJSON), int64(metric.Value.(float32)), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
-		case string:
-			if err := e.client.Set(string(metricJSON), string(metric.Value.(string)), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
+		} else {
+			e.config.Log.Info().Msgf("Received metric of type: %s", reflect.TypeOf(metric.Value).String())
 		}
 	}
 }

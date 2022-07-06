@@ -161,8 +161,8 @@ func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectio
 				}
 			} else {
 				// no previous targetCache existed
-				c.config.Log.Info().Msgf("Initializing target %s (%v) %v.", name, newConfig.Addresses, newConfig.Meta)
 				_, noLock := newConfig.Meta["NoLock"]
+				c.config.Log.Info().Msgf("Initializing target %s (%v) %v. ; using lock: %v", name, newConfig.Addresses, newConfig.Meta, c.zkConn != nil && !noLock)
 				_, clusterMember := newConfig.Meta["ClusterMember"]
 				c.connections[name] = &ConnectionState{
 					clusterMember: clusterMember,

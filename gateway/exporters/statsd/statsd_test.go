@@ -1,15 +1,20 @@
 package statsd
 
 import (
+	"net"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/go-zookeeper/zk"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
+	"github.com/openconfig/gnmi-gateway/gateway/loaders/zookeeper"
+	zkLoader "github.com/openconfig/gnmi-gateway/gateway/loaders/zookeeper"
 	"github.com/openconfig/gnmi/ctree"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/gnmi/proto/target"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
@@ -18,17 +23,161 @@ import (
 var _ exporters.Exporter = new(StatsdExporter)
 var serverAddress = "127.0.0.1:8125"
 
+var config = &configuration.GatewayConfig{
+	Exporters: &configuration.ExportersConfig{
+		StatsdHost: serverAddress,
+	},
+	ZookeeperTimeout:          30 * time.Second,
+	ExporterMetadataAllowlist: []string{"Account"},
+	TargetLoaders: &configuration.TargetLoadersConfig{
+		ZookeeperReloadInterval: 10 * time.Second,
+	},
+	TargetLimit:      100,
+	EnableClustering: false,
+	Log:              zerolog.New(os.Stderr).With().Timestamp().Logger().Level(zerolog.DebugLevel),
+}
+
+type MutexStringSlice struct {
+	mu sync.Mutex
+	s  []string
+}
+
+func TestStatsdExporter_Name(t *testing.T) {
+	var config configuration.GatewayConfig
+
+	e := NewStatsdExporter(&config)
+
+	assert.Equal(t, "statsd", e.Name())
+}
+
+func TestStatsdExporter_Export(t *testing.T) {
+	config.ZookeeperHosts = []string{os.Getenv("ZOOKEEPER_HOSTS")}
+	connMgr, err := createZKTargets(t)
+	assert.Nil(t, err)
+
+	e := &StatsdExporter{
+		config: config,
+	}
+
+	assert.Nil(t, err)
+
+	done := make(chan bool, 1)
+	output := &MutexStringSlice{
+		s: []string{},
+	}
+
+	go output.listenUDP(done)
+
+	assert.NotPanics(t, func() {
+		err = e.Start(&connMgr)
+		assert.Nil(t, err)
+
+		e.Export(ctree.DetachedLeaf(intNotif))
+		e.Export(ctree.DetachedLeaf(stringNotif))
+	})
+
+	time.Sleep(10 * time.Millisecond)
+	done <- true
+
+	go output.testOutput(t)
+}
+
+func (output *MutexStringSlice) listenUDP(done chan bool) {
+	output.mu.Lock()
+	defer output.mu.Unlock()
+	statsdServerConn, _ := createStatsdServer()
+	buf := make([]byte, 1024)
+	for {
+		select {
+		case <-done:
+			output.mu.Unlock()
+			return
+		default:
+			n, _, _ := statsdServerConn.ReadFromUDP(buf)
+			output.s = append(output.s, string(buf[0:n]))
+		}
+	}
+}
+
+func (output *MutexStringSlice) testOutput(t assert.TestingT) {
+	output.mu.Lock()
+	defer output.mu.Unlock()
+	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Interface metrics\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\",\"testKey\":\"testVal\"}}:1|g")
+	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Interface metrics\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\"}}:test|s")
+}
+
+func createStatsdServer() (*net.UDPConn, error) {
+	StatsdServer, err := net.ListenUDP("udp", &net.UDPAddr{IP: []byte{0, 0, 0, 0}, Port: 8125, Zone: ""})
+	if err != nil {
+		return nil, err
+	}
+	return StatsdServer, nil
+}
+
+func createZKTargets(t *testing.T) (connections.ConnectionManager, error) {
+	zkClient, err := zkLoader.NewZookeeperClient(config.ZookeeperHosts, config.ZookeeperTimeout)
+	if err != nil {
+		t.Skip("Couldn't connect to zookeeper")
+		return nil, err
+	}
+
+	if err := zkClient.AddZookeeperData(testTargetConfig); err != nil {
+		return nil, err
+	}
+
+	var connMgr connections.ConnectionManager
+
+	zkConn, _, err := zk.Connect(config.ZookeeperHosts, config.ZookeeperTimeout)
+	if err != nil {
+		t.Fatal("Zookeeper connection failed: " + err.Error())
+	}
+
+	connMgr, err = connections.NewZookeeperConnectionManagerDefault(config, zkConn, nil)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := connMgr.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := zkLoader.NewZookeeperTargetLoader(config)
+
+	err = loader.Start()
+	assert.Nil(t, err)
+	go loader.WatchConfiguration(connMgr.TargetControlChan())
+	assert.Nil(t, err)
+
+	targetFound := false
+	for attempt := 0; attempt < 10; attempt++ {
+
+		_, targetFound = connMgr.(*connections.ZookeeperConnectionManager).GetTargetConfig("test_target0")
+
+		if targetFound {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	assert.True(t, targetFound)
+
+	return connMgr, nil
+}
+
 var intNotif = &pb.Notification{
-	Prefix: &pb.Path{Target: "a", Origin: "b"},
+	Prefix: &pb.Path{Target: "test_target0", Origin: "b"},
 	Update: []*pb.Update{
 		{
 			Path: &pb.Path{
 				Elem: []*pb.PathElem{
 					{
-						Name: "test",
+						Name: "path0",
 						Key: map[string]string{
 							"testKey": "testVal",
 						},
+					},
+					{
+						Name: "path1",
 					},
 				},
 			},
@@ -39,7 +188,7 @@ var intNotif = &pb.Notification{
 }
 
 var stringNotif = &pb.Notification{
-	Prefix: &pb.Path{Target: "a", Origin: "b"},
+	Prefix: &pb.Path{Target: "test_target0", Origin: "b"},
 	Update: []*pb.Update{
 		{
 			Path: &pb.Path{
@@ -54,96 +203,32 @@ var stringNotif = &pb.Notification{
 	Timestamp: time.Now().UTC().UnixNano(),
 }
 
-func TestStatsdExporter_Name(t *testing.T) {
-	var config configuration.GatewayConfig
-
-	e := NewStatsdExporter(&config)
-
-	assert.Equal(t, "statsd", e.Name())
-}
-
-func TestStatsdExporter_Export(t *testing.T) {
-
-	config := &configuration.GatewayConfig{
-		Exporters: &configuration.ExportersConfig{
-			StatsdHost: serverAddress,
-		},
-	}
-	config.ExporterMetadataAllowlist = []string{"Account"}
-
-	var connMgr connections.ConnectionManager
-
-	zkConn, _, err := zk.Connect(config.ZookeeperHosts, config.ZookeeperTimeout)
-
-	connMgr, err = connections.NewZookeeperConnectionManagerDefault(config, zkConn, nil)
-
-	if err != nil {
-		panic(err)
-	}
-
-	if err := connMgr.Start(); err != nil {
-		panic(err)
-	}
-
-	mockTarget := &target.Target{
-		Addresses: []string{"127.0.0.1"},
-		Credentials: &target.Credentials{
-			Username: "admin",
-			Password: "admin",
-		},
-		Request: "default",
-		Meta: map[string]string{
-			"Account": "AFONFA",
-		},
-	}
-	mockRequest := &pb.SubscribeRequest{
-		Request: &pb.SubscribeRequest_Subscribe{
-			Subscribe: &pb.SubscriptionList{
-				Prefix: intNotif.GetPrefix(),
-				Subscription: []*pb.Subscription{
-					{
-						Path: intNotif.GetPrefix(),
-					},
-				},
+var testTargetConfig = &zookeeper.TargetConfig{
+	Connection: map[string]zookeeper.ConnectionConfig{
+		"test_target0": {
+			Addresses: []string{"172.17.0.4:6030"},
+			Meta: map[string]string{
+				"NoTLSVerify": "yes",
+				"Account":     "test",
+			},
+			Credentials: zookeeper.CredentialsConfig{
+				Username: "admin",
+				Password: "admin",
 			},
 		},
-	}
-	targetChan := connMgr.TargetControlChan()
-	targetMap := make(map[string]*target.Target)
-	targetMap["a"] = mockTarget
-	requestMap := make(map[string]*pb.SubscribeRequest)
-	requestMap["default"] = mockRequest
-
-	controlMsg := new(connections.TargetConnectionControl)
-	targetConfig := &target.Configuration{
-		Target:  targetMap,
-		Request: requestMap,
-	}
-
-	controlMsg.Insert = targetConfig
-
-	e := &StatsdExporter{
-		config: config,
-	}
-	if err := e.Start(&connMgr); err != nil {
-		panic(err)
-	}
-
-	targetChan <- controlMsg
-
-	targetFound := false
-	for attempt := 0; attempt < 10; attempt++ {
-		_, targetFound = connMgr.GetTargetConfig("a")
-		if targetFound {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	assert.True(t, targetFound)
-	assert.NotPanics(t, func() {
-		e.Export(ctree.DetachedLeaf(intNotif))
-
-		e.Export(ctree.DetachedLeaf(stringNotif))
-	})
-
+	},
+	Request: map[string]zookeeper.RequestConfig{
+		"default": {
+			Target: "*",
+			Paths: []string{
+				"/components",
+			},
+		},
+		"unused": {
+			Target: "*1",
+			Paths: []string{
+				"/interfaces",
+			},
+		},
+	},
 }
