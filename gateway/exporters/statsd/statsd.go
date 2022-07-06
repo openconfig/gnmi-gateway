@@ -156,12 +156,12 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 			if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		} else if valType := reflect.TypeOf(metric.Value).String(); valType == "*gnmi.TypedValue_StringVal" {
+		} else if reflect.TypeOf(metric.Value) == reflect.TypeOf((*gnmi.TypedValue_StringVal)(nil)) {
 			if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
 		} else {
-			e.config.Log.Info().Msgf("Received metric of type: %s", valType)
+			e.config.Log.Info().Msgf("Received metric of type: %s", reflect.TypeOf(metric.Value).String())
 		}
 	}
 }
