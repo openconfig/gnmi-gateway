@@ -52,6 +52,7 @@ func TestStatsdExporter_Name(t *testing.T) {
 
 func TestStatsdExporter_Export(t *testing.T) {
 
+	os.Setenv("ZOOKEEPER_HOSTS", "172.17.0.2")
 	config.ZookeeperHosts = []string{os.Getenv("ZOOKEEPER_HOSTS")}
 	connMgr, err := createZKTargets(t)
 	assert.Nil(t, err)
@@ -67,37 +68,42 @@ func TestStatsdExporter_Export(t *testing.T) {
 		s: []string{},
 	}
 
-	go func() {
-		output.mu.Lock()
-		defer output.mu.Unlock()
-		statsdServerConn, _ := createStatsdServer()
-		buf := make([]byte, 1024)
-		for {
-			select {
-			case <-done:
-				return
-			default:
-				n, _, _ := statsdServerConn.ReadFromUDP(buf)
-				output.s = append(output.s, string(buf[0:n]))
-			}
-		}
-	}()
+	go output.listenUDP(done)
+
 	assert.NotPanics(t, func() {
 		err = e.Start(&connMgr)
 		assert.Nil(t, err)
 
-		time.Sleep(50 * time.Millisecond)
-
 		e.Export(ctree.DetachedLeaf(intNotif))
-		time.Sleep(50 * time.Millisecond)
-
 		e.Export(ctree.DetachedLeaf(stringNotif))
-		time.Sleep(50 * time.Millisecond)
-
 	})
 
+	time.Sleep(10 * time.Millisecond)
 	done <- true
 
+	go output.testOutput(t)
+}
+
+func (output *MutexStringSlice) listenUDP(done chan bool) {
+	output.mu.Lock()
+	defer output.mu.Unlock()
+	statsdServerConn, _ := createStatsdServer()
+	buf := make([]byte, 1024)
+	for {
+		select {
+		case <-done:
+			output.mu.Unlock()
+			return
+		default:
+			n, _, _ := statsdServerConn.ReadFromUDP(buf)
+			output.s = append(output.s, string(buf[0:n]))
+		}
+	}
+}
+
+func (output *MutexStringSlice) testOutput(t assert.TestingT) {
+	output.mu.Lock()
+	defer output.mu.Unlock()
 	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Interface metrics\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\",\"testKey\":\"testVal\"}}:1|g")
 	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Interface metrics\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\"}}:test|s")
 }

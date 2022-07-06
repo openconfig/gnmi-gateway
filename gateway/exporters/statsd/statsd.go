@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -155,7 +156,7 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 			if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
-		} else if valType := fmt.Sprintf("%T", metric.Value); valType == "*gnmi.TypedValue_StringVal" {
+		} else if valType := reflect.TypeOf(metric.Value).String(); valType == "*gnmi.TypedValue_StringVal" {
 			if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
