@@ -123,7 +123,7 @@ func (c *ZookeeperConnectionManager) ReloadTargets() {
 }
 
 func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectionControl) {
-	log.Info().Msgf("Connection manager received a target control message: %v inserts %v removes", msg.InsertCount(), msg.RemoveCount())
+	log.Info().Msgf("Connection manager received a target control message: %v inserts %v removes ; reconnect all: %v", msg.InsertCount(), msg.RemoveCount(), msg.ReconnectAll)
 
 	if msg.Insert != nil {
 		if err := targetlib.Validate(msg.Insert); err != nil {
@@ -154,7 +154,7 @@ func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectio
 
 					existingConn.target = newConfig
 					existingConn.request = msg.Insert.Request[newConfig.Request]
-					err := existingConn.reconnect()
+					err := existingConn.reconnect(c.connLimit)
 					if err != nil {
 						c.config.Log.Error().Err(err).Msgf("Error reconnecting to target: %s", name)
 					}
@@ -190,7 +190,7 @@ func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectio
 
 	if msg.ReconnectAll {
 		for _, conn := range c.connections {
-			if err := conn.reconnect(); err != nil {
+			if err := conn.reconnect(c.connLimit); err != nil {
 				c.config.Log.Error().Msgf("Recconect failed for connection: ", err)
 			}
 		}

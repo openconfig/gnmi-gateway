@@ -33,10 +33,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/go-zookeeper/zk"
-	"github.com/openconfig/gnmi/errlist"
 	"sync"
 	"time"
+
+	"github.com/go-zookeeper/zk"
+	"github.com/openconfig/gnmi/errlist"
 
 	"github.com/Netflix/spectator-go"
 	"github.com/Netflix/spectator-go/histogram"
@@ -297,9 +298,15 @@ func (t *ConnectionState) disconnected() {
 	t.config.Log.Info().Msgf("Target %s: Disconnected", t.name)
 }
 
-func (t *ConnectionState) reconnect() error {
+func (t *ConnectionState) reconnect(connectionSlot *semaphore.Weighted) error {
 	t.config.Log.Info().Msgf("Target %s: Reconnecting", t.name)
-	return t.client.Close()
+	// if t.connecting
+	if err := t.client.Close(); err != nil {
+		return err
+	}
+
+	go t.connect(connectionSlot)
+	return nil
 }
 
 func (t *ConnectionState) unlock() error {

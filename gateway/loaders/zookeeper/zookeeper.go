@@ -20,15 +20,15 @@ import (
 // TODO Maybe add config parameters for targets & requests or some prefix
 const TargetPath = "/targets"
 const RequestPath = "/requests"
-const GlobalCertPath = "/certificates/global"
 const CertificatePath = "/certificates"
+const GlobalCertPath = "/certificates/global"
 
 var _ loaders.TargetLoader = new(ZookeeperTargetLoader)
 
 type CertificateConfig struct {
-	CA   string `yaml:"ca,omitempty"`
-	Cert string `yaml:"cert,omitempty"`
-	Key  string `yaml:"key, omitempty"`
+	ClientCA   string `yaml:"clientCa,omitempty"`
+	ClientCert string `yaml:"clientCert,omitempty"`
+	ClientKey  string `yaml:"clientKey,omitempty"`
 }
 
 type ConnectionConfig struct {
@@ -163,8 +163,13 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 	var childrenPaths []string
 	var zkChildrenEvents <-chan zk.Event
 	var err error
-	var eventChannel <-chan zk.Event
 
+	if err := z.zkClient.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
+		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh config")
+		if err == zk.ErrConnectionClosed {
+			goto Exit
+		}
+	}
 	z.config.Log.Info().Msgf("[ZK] Starting zookeeper target monitoring")
 	if err := z.refreshTargetConfiguration(targetChan); err != nil {
 		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh targets")
@@ -172,6 +177,14 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 			goto Exit
 		}
 	}
+
+	// TODO: Fix reconnect issue for target connections
+	// if err := z.zkClient.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
+	// 	z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh config")
+	// 	if err == zk.ErrConnectionClosed {
+	// 		goto Exit
+	// 	}
+	// }
 
 	childrenPaths, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(TargetPath)
 	if err != nil {
@@ -195,23 +208,32 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 	}
 
 	// Certificate watch
-	_, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
+	childrenPaths, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
+	if err == zk.ErrNoNode {
+		z.zkClient.createNode(CertificatePath)
+		_, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
+	}
 	if err != nil {
 		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", CertificatePath)
 		return err
+
 	}
+
 	z.config.Log.Info().Msgf("[ZK] Set watch for children of path: %s", CertificatePath)
 
 	channelMap[CertificatePath] = zkChildrenEvents
 
-	_, _, eventChannel, err = z.zkClient.conn.GetW(GlobalCertPath)
-	if err != nil {
-		z.config.Log.Error().Msgf("[ZK] Unable to set watch for global certificate")
-		return err
+	for _, path := range childrenPaths {
+		watchPath := CleanPath(CertificatePath) + CleanPath(path)
+		_, _, eventChannel, err := z.zkClient.conn.GetW(watchPath)
+		channelMap[watchPath] = eventChannel
+		if err != nil {
+			z.config.Log.Error().Err(err).Msgf("[ZK] Unable to set watch for target at path: '%s'", watchPath)
+			return err
+		} else {
+			z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for: %s", watchPath)
+		}
 	}
-
-	channelMap[GlobalCertPath] = eventChannel
-	z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for global certificate")
 
 	for {
 		eventChannels := buildEventChanArray(channelMap)
@@ -250,7 +272,7 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 				}
 
 				// Certificate watch
-				_, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
+				childrenPaths, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
 				if err != nil {
 					z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", CertificatePath)
 					return err
@@ -258,14 +280,6 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 				z.config.Log.Info().Msgf("[ZK] Set watch for children of path: %s", CertificatePath)
 
 				channelMap[CertificatePath] = zkChildrenEvents
-
-				_, _, eventChannel, err = z.zkClient.conn.GetW(GlobalCertPath)
-				if err != nil {
-					z.config.Log.Error().Msgf("[ZK] Unable to set watch for global certificate")
-					return err
-				}
-
-				channelMap[GlobalCertPath] = eventChannel
 
 			} else {
 				if err := z.refreshTargetConfiguration(targetChan); err != nil {
@@ -287,22 +301,22 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 				channelMap[TargetPath] = zkChildrenEvents
 
 				z.config.Log.Info().Msgf("[ZK] Set watch for children of path: %s", TargetPath)
+			}
 
-				for _, path := range childrenPaths {
-					watchPath := CleanPath(TargetPath) + CleanPath(path)
+			for _, path := range childrenPaths {
+				watchPath := CleanPath(TargetPath) + CleanPath(path)
 
-					if _, exists := channelMap[watchPath]; !exists {
-						_, _, eventChannel, err := z.zkClient.conn.GetW(watchPath)
-						channelMap[watchPath] = eventChannel
-						if err != nil {
-							z.config.Log.Error().Err(err).Msgf("[ZK] Unable to set watch for target at path: '%s'", watchPath)
-							return err
-						} else {
-							z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for: %s", watchPath)
-						}
+				if _, exists := channelMap[watchPath]; !exists {
+					_, _, eventChannel, err := z.zkClient.conn.GetW(watchPath)
+					channelMap[watchPath] = eventChannel
+					if err != nil {
+						z.config.Log.Error().Err(err).Msgf("[ZK] Unable to set watch for target at path: '%s'", watchPath)
+						return err
+					} else {
+						z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for: %s", watchPath)
 					}
-
 				}
+
 			}
 
 		case zk.EventNodeDataChanged:
@@ -389,7 +403,7 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 			})
 		}
 		found := false
-		for targetName, _ := range configs.Target {
+		for targetName := range configs.Target {
 			// TODO: consider adding a helper
 			if match, _ := filepath.Match(request.Target, targetName); match {
 				found = true

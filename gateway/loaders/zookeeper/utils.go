@@ -3,6 +3,7 @@ package zookeeper
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,25 +33,37 @@ func (z *ZookeeperClient) refreshZookeeperConfig(log zerolog.Logger, targetChan 
 			return err
 		}
 
-		CA := &x509.Certificate{
-			Raw:  []byte(certConf.CA),
-			IsCA: true,
+		tlsConfig := &tls.Config{
+			Renegotiation: tls.RenegotiateNever,
 		}
 
-		config.ClientTLSConfig.ClientCAs.AddCert(CA)
-		config.ClientTLSConfig.ClientAuth = tls.RequestClientCert
-		config.ClientTLSConfig.Certificates = []tls.Certificate{
-			{
-				Certificate: [][]byte{
-					[]byte(certConf.Cert),
-				},
-				PrivateKey: certConf.Key,
-			},
+		if len(certConf.ClientCA) == 0 {
+			tlsConfig.InsecureSkipVerify = true
+		} else {
+			certPool := x509.NewCertPool()
+			if ok := certPool.AppendCertsFromPEM([]byte(certConf.ClientCA)); !ok {
+				return errors.New("invalid ClientCA certificate")
+			}
+			tlsConfig.RootCAs = certPool
 		}
+
+		if len(certConf.ClientCert) > 0 && len(certConf.ClientKey) > 0 {
+			cert, err := tls.X509KeyPair([]byte(certConf.ClientCert), []byte(certConf.ClientKey))
+			if err != nil {
+				return err
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+
+		config.ClientTLSConfig = tlsConfig
+
+		config.Log.Info().Msg("Gateway TLS Config set. Using TLS client authentication")
 
 		controlMsg := new(connections.TargetConnectionControl)
 		controlMsg.ReconnectAll = true
 		targetChan <- controlMsg
+	} else {
+		config.Log.Info().Msg("No TLS Certificates found")
 	}
 
 	return nil

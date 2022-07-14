@@ -153,10 +153,13 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 
 		val, isNumericValue := utils.GetNumberValues(update.Val)
 		if isNumericValue {
+			e.config.Log.Info().Msgf("%s:%d|g", string(metricJSON), int64(val))
 			if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
 		} else if reflect.TypeOf(metric.Value) == reflect.TypeOf((*gnmi.TypedValue_StringVal)(nil)) {
+			e.config.Log.Info().Msgf("%s:%s|s", string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal))
+
 			if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
 				e.config.Log.Error().Msg(err.Error())
 			}
