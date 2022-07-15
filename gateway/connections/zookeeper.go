@@ -189,11 +189,60 @@ func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectio
 	}
 
 	if msg.ReconnectAll {
+		// targets := make(map[string]*targetpb.Target)
+		// targetNames := []string{}
 		for _, conn := range c.connections {
+			// c.config.Log.Info().Msgf("Reconnecting conn: ", conn)
 			if err := conn.reconnect(c.connLimit); err != nil {
 				c.config.Log.Error().Msgf("Recconect failed for connection: ", err)
 			}
+
+			// targetNames = append(targetNames, conn.name)
+
+			// Idea 1
+			// targets[conn.name] = conn.target
+
+			// Idea 2
+			// delete(c.connections, connName)
+
+			// _, noLock := conn.target.Meta["NoLock"]
+			// c.config.Log.Info().Msgf("Initializing target %s (%v) %v. ; using lock: %v", conn.name, conn.target.Addresses, conn.target.Meta, c.zkConn != nil && !noLock)
+
+			// c.connections[connName].InitializeMetrics()
+			// if c.connections[connName].useLock {
+			// 	lockPath := MakeTargetLockPath(c.config.ZookeeperPrefix, connName)
+			// 	clusterMemberAddress := c.config.ServerAddress + ":" + strconv.Itoa(c.config.ServerPort)
+			// 	c.connections[connName].lock = locking.NewZookeeperNonBlockingLock(c.zkConn, lockPath, clusterMemberAddress, zk.WorldACL(zk.PermAll))
+			// 	go c.connections[connName].connectWithLock(c.connLimit)
+			// } else {
+			// 	go c.connections[connName].connect(c.connLimit)
+			// }
+
+			// Idea 3
+			// connecting := conn.connecting
+			// c.config.Log.Info().Msgf("connecting init: ", connecting)
+
+			// conn.disconnect()
+			// c.config.Log.Info().Msgf("connecting after disconnect: ", connecting)
+
+			// conn.disconnected()
+			// c.config.Log.Info().Msgf("connecting after disconnected: ", connecting)
+
+			// conn.reset()
+			// c.config.Log.Info().Msgf("connecting after reset: ", connecting)
+
+			// conn.doConnect()
+			// c.config.Log.Info().Msgf("connecting after doConnect: ", connecting)
+			// c.config.Log.Info().Msgf("connected: ", conn.connected)
 		}
+
+		// controlMsg := new(TargetConnectionControl)
+		// controlMsg.ReconnectAll = false
+		// controlMsg.Insert = &targetpb.Configuration{
+		// 	Target: targets,
+		// }
+		// controlMsg.Remove = targetNames
+		// c.handleTargetControlMsg(controlMsg)
 	}
 
 	c.connectionsMutex.Unlock()

@@ -164,7 +164,7 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 	var zkChildrenEvents <-chan zk.Event
 	var err error
 
-	if err := z.zkClient.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
+	if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
 		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh config")
 		if err == zk.ErrConnectionClosed {
 			goto Exit
@@ -179,7 +179,7 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 	}
 
 	// TODO: Fix reconnect issue for target connections
-	// if err := z.zkClient.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
+	// if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
 	// 	z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh config")
 	// 	if err == zk.ErrConnectionClosed {
 	// 		goto Exit
@@ -264,7 +264,7 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 			z.config.Log.Info().Msgf("[ZK] Received children event: %s at %s", event.Type.String(), event.Path)
 
 			if strings.Contains(event.Path, CertificatePath) {
-				if err := z.zkClient.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
+				if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
 					z.config.Log.Error().Err(err).Msgf("Unable to refresh config at path: '%s' - '%s'", event.Path, err)
 					if err == zk.ErrConnectionClosed {
 						goto Exit
@@ -324,7 +324,7 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 			z.config.Log.Info().Msgf("[ZK] Received data event: %s at path '%s'", event.Type.String(), event.Path)
 
 			if strings.Contains(event.Path, CertificatePath) {
-				if err := z.zkClient.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
+				if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
 					return err
 				}
 			} else {

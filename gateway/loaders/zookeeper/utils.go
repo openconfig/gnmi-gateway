@@ -22,9 +22,9 @@ type ZookeeperClient struct {
 	conn *zk.Conn
 }
 
-func (z *ZookeeperClient) refreshZookeeperConfig(log zerolog.Logger, targetChan chan<- *connections.TargetConnectionControl, config *configuration.GatewayConfig) error {
-	if exists, _, _ := z.conn.Exists(GlobalCertPath); exists {
-		tlsData, err := z.getNodeValue(GlobalCertPath)
+func (z *ZookeeperTargetLoader) refreshZookeeperConfig(log zerolog.Logger, targetChan chan<- *connections.TargetConnectionControl, config *configuration.GatewayConfig) error {
+	if exists, _, _ := z.zkClient.conn.Exists(GlobalCertPath); exists {
+		tlsData, err := z.zkClient.getNodeValue(GlobalCertPath)
 		if err != nil {
 			return err
 		}
@@ -62,6 +62,7 @@ func (z *ZookeeperClient) refreshZookeeperConfig(log zerolog.Logger, targetChan 
 		controlMsg := new(connections.TargetConnectionControl)
 		controlMsg.ReconnectAll = true
 		targetChan <- controlMsg
+		// z.refreshTargetConfiguration(targetChan)
 	} else {
 		config.Log.Info().Msg("No TLS Certificates found")
 	}
