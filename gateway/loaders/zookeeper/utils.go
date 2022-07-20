@@ -53,6 +53,8 @@ func (z *ZookeeperTargetLoader) refreshZookeeperConfig(log zerolog.Logger, targe
 				return err
 			}
 			tlsConfig.Certificates = []tls.Certificate{cert}
+		} else {
+			return errors.New("client cert or key has length 0, discarding TLS config")
 		}
 
 		config.ClientTLSConfig = tlsConfig
@@ -62,7 +64,6 @@ func (z *ZookeeperTargetLoader) refreshZookeeperConfig(log zerolog.Logger, targe
 		controlMsg := new(connections.TargetConnectionControl)
 		controlMsg.ReconnectAll = true
 		targetChan <- controlMsg
-		// z.refreshTargetConfiguration(targetChan)
 	} else {
 		config.Log.Info().Msg("No TLS Certificates found")
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/target"
+	"k8s.io/utils/strings/slices"
 )
 
 // TODO Maybe add config parameters for targets & requests or some prefix
@@ -160,9 +161,6 @@ func buildEventChanArray(channelMap map[string]<-chan zk.Event) []<-chan zk.Even
 
 func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connections.TargetConnectionControl) error {
 	channelMap := make(map[string]<-chan zk.Event)
-	var childrenPaths []string
-	var zkChildrenEvents <-chan zk.Event
-	var err error
 
 	if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
 		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh config")
@@ -186,52 +184,12 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 	// 	}
 	// }
 
-	childrenPaths, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(TargetPath)
-	if err != nil {
-		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", TargetPath)
-		return err
-	}
-	z.config.Log.Info().Msgf("[ZK] Set watch for children of path: %s", TargetPath)
-
-	channelMap[TargetPath] = zkChildrenEvents
-
-	for _, path := range childrenPaths {
-		watchPath := CleanPath(TargetPath) + CleanPath(path)
-		_, _, eventChannel, err := z.zkClient.conn.GetW(watchPath)
-		channelMap[watchPath] = eventChannel
-		if err != nil {
-			z.config.Log.Error().Err(err).Msgf("[ZK] Unable to set watch for target at path: '%s'", watchPath)
-			return err
-		} else {
-			z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for: %s", watchPath)
-		}
-	}
-
-	// Certificate watch
-	childrenPaths, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
-	if err == zk.ErrNoNode {
-		z.zkClient.createNode(CertificatePath)
-		_, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
-	}
-	if err != nil {
-		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", CertificatePath)
-		return err
-
-	}
-
-	z.config.Log.Info().Msgf("[ZK] Set watch for children of path: %s", CertificatePath)
-
-	channelMap[CertificatePath] = zkChildrenEvents
-
-	for _, path := range childrenPaths {
-		watchPath := CleanPath(CertificatePath) + CleanPath(path)
-		_, _, eventChannel, err := z.zkClient.conn.GetW(watchPath)
-		channelMap[watchPath] = eventChannel
-		if err != nil {
-			z.config.Log.Error().Err(err).Msgf("[ZK] Unable to set watch for target at path: '%s'", watchPath)
-			return err
-		} else {
-			z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for: %s", watchPath)
+	for _, watchPath := range []string{TargetPath, RequestPath, CertificatePath} {
+		if err := z.refreshWatches(channelMap, watchPath); err != nil {
+			z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh watches")
+			if err == zk.ErrConnectionClosed {
+				goto Exit
+			}
 		}
 	}
 
@@ -259,6 +217,19 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 
 			delete(channelMap, event.Path)
 
+			if slices.Contains([]string{TargetPath, RequestPath, CertificatePath}, event.Path) {
+				z.config.Log.Info().Msg("[ZK] Detected deletion of root config path, recreating: " + event.Path)
+				if err := z.zkClient.createNode(event.Path); err != nil {
+					z.config.Log.Error().Err(err).Msgf("[ZK] Unable to recreate node ", event.Path)
+				}
+				if err := z.refreshWatches(channelMap, event.Path); err != nil {
+					z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh watches")
+					if err == zk.ErrConnectionClosed {
+						goto Exit
+					}
+				}
+			}
+
 		case zk.EventNodeChildrenChanged:
 
 			z.config.Log.Info().Msgf("[ZK] Received children event: %s at %s", event.Type.String(), event.Path)
@@ -270,53 +241,19 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 						goto Exit
 					}
 				}
-
-				// Certificate watch
-				childrenPaths, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
-				if err != nil {
-					z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", CertificatePath)
-					return err
-				}
-				z.config.Log.Info().Msgf("[ZK] Set watch for children of path: %s", CertificatePath)
-
-				channelMap[CertificatePath] = zkChildrenEvents
-
 			} else {
 				if err := z.refreshTargetConfiguration(targetChan); err != nil {
-					z.config.Log.Error().Err(err).Msgf("Unable to refresh target at path: '%s' - '%s'", event.Path, err)
+					z.config.Log.Error().Err(err).Msgf("Unable to refresh node at path: '%s' - '%s'", event.Path, err)
 					if err == zk.ErrConnectionClosed {
 						goto Exit
 					}
 				}
-				childrenPaths, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(TargetPath)
-
-				if err != nil {
-					z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", TargetPath)
-					if err == zk.ErrConnectionClosed {
-						goto Exit
-					}
-					return err
-				}
-
-				channelMap[TargetPath] = zkChildrenEvents
-
-				z.config.Log.Info().Msgf("[ZK] Set watch for children of path: %s", TargetPath)
 			}
-
-			for _, path := range childrenPaths {
-				watchPath := CleanPath(TargetPath) + CleanPath(path)
-
-				if _, exists := channelMap[watchPath]; !exists {
-					_, _, eventChannel, err := z.zkClient.conn.GetW(watchPath)
-					channelMap[watchPath] = eventChannel
-					if err != nil {
-						z.config.Log.Error().Err(err).Msgf("[ZK] Unable to set watch for target at path: '%s'", watchPath)
-						return err
-					} else {
-						z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for: %s", watchPath)
-					}
+			if err := z.refreshWatches(channelMap, event.Path); err != nil {
+				z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh watches")
+				if err == zk.ErrConnectionClosed {
+					goto Exit
 				}
-
 			}
 
 		case zk.EventNodeDataChanged:
@@ -325,7 +262,10 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 
 			if strings.Contains(event.Path, CertificatePath) {
 				if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
-					return err
+					z.config.Log.Error().Err(err).Msgf("Unable to refresh config at path: '%s' - '%s'", event.Path, err)
+					if err == zk.ErrConnectionClosed {
+						goto Exit
+					}
 				}
 			} else {
 				if err := z.refreshTargetConfiguration(targetChan); err != nil {
@@ -350,6 +290,40 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 	}
 Exit:
 	fmt.Println("Zookeeper connection closed")
+	return nil
+}
+
+func (z *ZookeeperTargetLoader) refreshWatches(channelMap map[string]<-chan zk.Event, path string) error {
+	z.config.Log.Info().Msgf("Refreshing children and data watches for: '%s'", path)
+	cleanPath := CleanPath(path)
+	childrenPaths, _, zkChildrenEvents, err := z.zkClient.conn.ChildrenW(cleanPath)
+
+	if err == zk.ErrNoNode {
+		if err := z.zkClient.createNode(cleanPath); err != nil {
+			return err
+		}
+		_, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
+	}
+
+	if err != nil {
+		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to create watch for children of path: %s", cleanPath)
+		return err
+	}
+	z.config.Log.Info().Msgf("[ZK] Set watch for children of path: %s", cleanPath)
+
+	channelMap[cleanPath] = zkChildrenEvents
+
+	for _, path := range childrenPaths {
+		watchPath := cleanPath + CleanPath(path)
+		_, _, eventChannel, err := z.zkClient.conn.GetW(watchPath)
+		channelMap[watchPath] = eventChannel
+		if err != nil {
+			z.config.Log.Error().Err(err).Msgf("[ZK] Unable to set watch for node at path: '%s'", watchPath)
+			return err
+		} else {
+			z.config.Log.Info().Msgf("[ZK] Successfuly set data watch for: %s", watchPath)
+		}
+	}
 	return nil
 }
 
