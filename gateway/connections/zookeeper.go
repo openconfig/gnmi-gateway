@@ -151,13 +151,11 @@ func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectio
 
 					existingConn.target = newConfig
 					existingConn.request = msg.Insert.Request[newConfig.Request]
-					go existingConn.reconnect(c.connLimit)
-				} else {
-					if existingConn.request != msg.Insert.Request[newConfig.Request] {
-						c.config.Log.Info().Msgf("Updating request for target: %s", name)
-						existingConn.request = msg.Insert.Request[newConfig.Request]
-					}
-					go existingConn.reconnect(c.connLimit)
+					go existingConn.reconnect()
+				} else if existingConn.request != msg.Insert.Request[newConfig.Request] {
+					c.config.Log.Info().Msgf("Updating request for target: %s", name)
+					existingConn.request = msg.Insert.Request[newConfig.Request]
+					go existingConn.reconnect()
 				}
 			} else {
 				// no previous targetCache existed
@@ -190,7 +188,7 @@ func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectio
 
 	if msg.ReconnectAll {
 		for _, conn := range c.connections {
-			go conn.reconnect(c.connLimit)
+			go conn.reconnect()
 		}
 	}
 
