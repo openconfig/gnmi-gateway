@@ -151,10 +151,13 @@ func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectio
 
 					existingConn.target = newConfig
 					existingConn.request = msg.Insert.Request[newConfig.Request]
-					err := existingConn.reconnect(c.connLimit)
-					if err != nil {
-						c.config.Log.Error().Err(err).Msgf("Error reconnecting to target: %s", name)
+					go existingConn.reconnect(c.connLimit)
+				} else {
+					if existingConn.request != msg.Insert.Request[newConfig.Request] {
+						c.config.Log.Info().Msgf("Updating request for target: %s", name)
+						existingConn.request = msg.Insert.Request[newConfig.Request]
 					}
+					go existingConn.reconnect(c.connLimit)
 				}
 			} else {
 				// no previous targetCache existed
