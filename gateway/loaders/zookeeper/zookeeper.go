@@ -434,6 +434,13 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 		}
 	}
 
+	for name, target := range configs.Target {
+		if _, ok := configs.Request[target.Request]; !ok {
+			z.config.Log.Info().Msgf("target %s has no associated request, skipping its configuration", name)
+			delete(configs.Target, name)
+		}
+	}
+
 	return configs, nil
 }
 
