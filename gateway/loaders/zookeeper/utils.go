@@ -1,12 +1,17 @@
 package zookeeper
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-zookeeper/zk"
+	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -15,6 +20,55 @@ import (
 type ZookeeperClient struct {
 	acl  []zk.ACL
 	conn *zk.Conn
+}
+
+func (z *ZookeeperTargetLoader) refreshGlobalConfig(log zerolog.Logger, targetChan chan<- *connections.TargetConnectionControl, config *configuration.GatewayConfig) error {
+	if exists, _, _ := z.zkClient.conn.Exists(GlobalCertPath); exists {
+		tlsData, err := z.zkClient.getNodeValue(GlobalCertPath)
+		if err != nil {
+			return err
+		}
+		certConf := &CertificateConfig{}
+		if err := yaml.Unmarshal(tlsData, certConf); err != nil {
+			return err
+		}
+
+		tlsConfig := &tls.Config{
+			Renegotiation: tls.RenegotiateNever,
+		}
+
+		if len(certConf.ClientCA) == 0 {
+			tlsConfig.InsecureSkipVerify = true
+		} else {
+			certPool := x509.NewCertPool()
+			if ok := certPool.AppendCertsFromPEM([]byte(certConf.ClientCA)); !ok {
+				return errors.New("invalid ClientCA certificate")
+			}
+			tlsConfig.RootCAs = certPool
+		}
+
+		if len(certConf.ClientCert) > 0 && len(certConf.ClientKey) > 0 {
+			cert, err := tls.X509KeyPair([]byte(certConf.ClientCert), []byte(certConf.ClientKey))
+			if err != nil {
+				return err
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		} else {
+			return errors.New("client cert or key has length 0, discarding TLS config")
+		}
+
+		config.ClientTLSConfig = tlsConfig
+
+		config.Log.Info().Msg("Gateway TLS Config set. Using TLS client authentication")
+
+		controlMsg := new(connections.TargetConnectionControl)
+		controlMsg.ReconnectAll = true
+		targetChan <- controlMsg
+	} else {
+		config.Log.Info().Msg("No TLS Certificates found")
+	}
+
+	return nil
 }
 
 func (z *ZookeeperClient) GetZookeeperData(log zerolog.Logger) (*TargetConfig, error) {

@@ -33,10 +33,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/go-zookeeper/zk"
-	"github.com/openconfig/gnmi/errlist"
 	"sync"
 	"time"
+
+	"github.com/go-zookeeper/zk"
+	"github.com/openconfig/gnmi/errlist"
 
 	"github.com/Netflix/spectator-go"
 	"github.com/Netflix/spectator-go/histogram"
