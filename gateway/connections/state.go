@@ -300,13 +300,7 @@ func (t *ConnectionState) disconnected() {
 
 func (t *ConnectionState) reconnect(connectionSlot *semaphore.Weighted) error {
 	t.config.Log.Info().Msgf("Target %s: Reconnecting", t.name)
-	// if t.connecting
-	if err := t.client.Close(); err != nil {
-		return err
-	}
-
-	go t.connect(connectionSlot)
-	return nil
+	return t.client.Close()
 }
 
 func (t *ConnectionState) unlock() error {
