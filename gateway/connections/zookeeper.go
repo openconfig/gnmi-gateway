@@ -194,7 +194,7 @@ func (c *ZookeeperConnectionManager) handleTargetControlMsg(msg *TargetConnectio
 		for _, conn := range c.connections {
 			// c.config.Log.Info().Msgf("Reconnecting conn: ", conn)
 			if err := conn.reconnect(c.connLimit); err != nil {
-				c.config.Log.Error().Msgf("Recconect failed for connection: ", err)
+				c.config.Log.Error().Msgf("Reconnect failed: ", err)
 			}
 
 			// targetNames = append(targetNames, conn.name)

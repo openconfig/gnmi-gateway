@@ -22,7 +22,7 @@ type ZookeeperClient struct {
 	conn *zk.Conn
 }
 
-func (z *ZookeeperTargetLoader) refreshZookeeperConfig(log zerolog.Logger, targetChan chan<- *connections.TargetConnectionControl, config *configuration.GatewayConfig) error {
+func (z *ZookeeperTargetLoader) refreshGlobalConfig(log zerolog.Logger, targetChan chan<- *connections.TargetConnectionControl, config *configuration.GatewayConfig) error {
 	if exists, _, _ := z.zkClient.conn.Exists(GlobalCertPath); exists {
 		tlsData, err := z.zkClient.getNodeValue(GlobalCertPath)
 		if err != nil {

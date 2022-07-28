@@ -162,7 +162,7 @@ func buildEventChanArray(channelMap map[string]<-chan zk.Event) []<-chan zk.Even
 func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connections.TargetConnectionControl) error {
 	channelMap := make(map[string]<-chan zk.Event)
 
-	if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
+	if err := z.refreshGlobalConfig(z.config.Log, targetChan, z.config); err != nil {
 		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh config")
 		if err == zk.ErrConnectionClosed {
 			goto Exit
@@ -175,14 +175,6 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 			goto Exit
 		}
 	}
-
-	// TODO: Fix reconnect issue for target connections
-	// if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
-	// 	z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh config")
-	// 	if err == zk.ErrConnectionClosed {
-	// 		goto Exit
-	// 	}
-	// }
 
 	for _, watchPath := range []string{TargetPath, RequestPath, CertificatePath} {
 		if err := z.refreshWatches(channelMap, watchPath); err != nil {
@@ -235,7 +227,7 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 			z.config.Log.Info().Msgf("[ZK] Received children event: %s at %s", event.Type.String(), event.Path)
 
 			if strings.Contains(event.Path, CertificatePath) {
-				if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
+				if err := z.refreshGlobalConfig(z.config.Log, targetChan, z.config); err != nil {
 					z.config.Log.Error().Err(err).Msgf("Unable to refresh config at path: '%s' - '%s'", event.Path, err)
 					if err == zk.ErrConnectionClosed {
 						goto Exit
@@ -261,7 +253,7 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 			z.config.Log.Info().Msgf("[ZK] Received data event: %s at path '%s'", event.Type.String(), event.Path)
 
 			if strings.Contains(event.Path, CertificatePath) {
-				if err := z.refreshZookeeperConfig(z.config.Log, targetChan, z.config); err != nil {
+				if err := z.refreshGlobalConfig(z.config.Log, targetChan, z.config); err != nil {
 					z.config.Log.Error().Err(err).Msgf("Unable to refresh config at path: '%s' - '%s'", event.Path, err)
 					if err == zk.ErrConnectionClosed {
 						goto Exit
