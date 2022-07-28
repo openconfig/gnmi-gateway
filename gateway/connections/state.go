@@ -298,7 +298,7 @@ func (t *ConnectionState) disconnected() {
 	t.config.Log.Info().Msgf("Target %s: Disconnected", t.name)
 }
 
-func (t *ConnectionState) reconnect(connectionSlot *semaphore.Weighted) error {
+func (t *ConnectionState) reconnect() error {
 	t.config.Log.Info().Msgf("Target %s: Reconnecting", t.name)
 	return t.client.Close()
 }
