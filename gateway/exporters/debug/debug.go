@@ -18,6 +18,8 @@
 package debug
 
 import (
+	"fmt"
+
 	"github.com/openconfig/gnmi/ctree"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 
@@ -53,7 +55,19 @@ func (e *DebugExporter) Name() string {
 
 func (e *DebugExporter) Export(leaf *ctree.Leaf) {
 	notification := leaf.Value().(*gnmipb.Notification)
-	e.config.Log.Info().Msg(utils.GNMINotificationPrettyString(notification))
+	msg := utils.GNMINotificationPrettyString(notification)
+
+	if len(notification.Update) > 0 {
+		msg += " update_path_meta:[ "
+		for _, u := range notification.Update {
+			msg += fmt.Sprintf(
+				"%v, ", e.config.GetPathMetadata(
+					utils.GetTrimmedPath(notification.Prefix, u.Path)))
+		}
+		msg += "] "
+	}
+
+	e.config.Log.Info().Msg(msg)
 }
 
 func (e *DebugExporter) Start(connMgr *connections.ConnectionManager) error {

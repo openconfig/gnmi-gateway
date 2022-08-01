@@ -25,6 +25,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/Netflix/spectator-go"
@@ -37,6 +39,7 @@ import (
 // Many of these options may be set via command-line flags. See main.go for details on flags that
 // are available.
 type GatewayConfig struct {
+	mu sync.RWMutex
 	// ClientTLSConfig are the gNMI client TLS credentials. Setting this will enable client TLS.
 	// TODO (cmcintosh): Add options to set client certificates by path (i.e. like the server TLS creds).
 	ClientTLSConfig *tls.Config `ignored:"true"`
@@ -114,6 +117,9 @@ type GatewayConfig struct {
 	// ExporterMetadataAllowlist will tell the exporter which metadata to include
 	// in the gnmi notification before exporting the metric
 	ExporterMetadataAllowlist []string `json:"exporter_metadata_allowlist"`
+	// per-path metadata
+	// TODO: consider using a tree
+	pathMeta map[string]*map[string]string
 }
 
 type ExportersConfig struct {
@@ -203,6 +209,7 @@ func NewDefaultGatewayConfig() *GatewayConfig {
 		Exporters:     new(ExportersConfig),
 		Log:           zerolog.New(os.Stderr).With().Timestamp().Logger().Level(zerolog.InfoLevel),
 		TargetLoaders: new(TargetLoadersConfig),
+		pathMeta: make(map[string]*map[string]string, 0),
 	}
 	return config
 }
@@ -239,4 +246,50 @@ func PopulateGatewayConfigFromFile(config *GatewayConfig, filePath string) error
 		config.ZookeeperTimeout *= time.Second
 	}
 	return nil
+}
+
+// Metadata returns the per-path metadata structures.
+// Children inherit parent metadata.
+func (c *GatewayConfig) GetPathMetadata(path string) map[string]string {
+	md := map[string]string{}
+	defer c.mu.RUnlock()
+	c.mu.RLock()
+
+	path = strings.TrimRight(path, "/")
+
+	for {
+		foundMeta, found := c.pathMeta[path]
+		if found {
+			for key, val := range *foundMeta {
+				// Parent metadata doesn't override children metadata.
+				if _, found := md[key]; !found {
+					md[key] = val
+				}
+			}
+		}
+
+		if path == "" || path == "." || path == "/" {
+			break
+		}
+		parent := filepath.Dir(path)
+		path = strings.TrimRight(parent, "/")
+	}
+
+	return md
+}
+
+func (c *GatewayConfig) AddPathMetadata(path string, meta map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	path = strings.TrimRight(path, "/")
+	pathMeta, found := c.pathMeta[path]
+	if !found {
+		pathMeta = &map[string]string{}
+		c.pathMeta[path] = pathMeta
+	}
+
+	for key, val := range meta {
+		(*pathMeta)[key] = val
+	}
 }
