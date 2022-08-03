@@ -71,6 +71,26 @@ func (z *ZookeeperTargetLoader) refreshGlobalConfig(log zerolog.Logger, targetCh
 	return nil
 }
 
+func (z *ZookeeperTargetLoader) refreshPathMeta() error {
+	// TODO: right now, the path metadata is specified using
+	// /pathMeta/$groupName Zookeeper nodes *and* as part of the gnmi requests
+	// at /requests/$requestID.
+	//
+	// The issue is that a single path may receive metadata from multiple sources,
+	// which makes it difficult to perform cleanups.
+	//
+	// We should unify the above, perhaps moving request path metadata
+	// to something like /pathMeta/$requestID-meta.
+	meta, err := z.zkClient.getPathMeta(z.config.Log)
+	if err != nil {
+		return err
+	}
+	for key, val := range meta {
+		z.config.AddPathMetadata(key, *val)
+	}
+	return nil
+}
+
 func (z *ZookeeperClient) GetZookeeperData(log zerolog.Logger) (*TargetConfig, error) {
 	connectionMap := make(map[string]ConnectionConfig)
 	requestMap := make(map[string]RequestConfig)
@@ -139,6 +159,51 @@ func (z *ZookeeperClient) GetZookeeperData(log zerolog.Logger) (*TargetConfig, e
 	}
 
 	return targetConf, nil
+}
+
+// Get global gnmi path metadata
+func (z *ZookeeperClient) getPathMeta(log zerolog.Logger) (map[string]*map[string]string, error) {
+	meta := make(map[string]*map[string]string, 0)
+
+	if exists, _, _ := z.conn.Exists(CleanPath(PathMetaPath)); exists {
+		zNodes, _, err := z.conn.Children(CleanPath(PathMetaPath))
+		if err != nil {
+			return meta, err
+		}
+
+		for _, n := range zNodes {
+			c := &PathMetaConfig{}
+
+			crtPath := CleanPath(PathMetaPath) + CleanPath(n)
+			data, err := z.getNodeValue(crtPath)
+			if err != nil {
+				return meta, err
+			}
+
+			if err := yaml.Unmarshal(data, c); err != nil {
+				log.Error().Err(err).Msgf("Error unmarshalling zNode into yaml: '%s'", crtPath)
+				continue
+			}
+
+			for _, path := range c.Paths {
+				pathMeta, found := meta[path]
+				if !found {
+					pathMeta = &map[string]string{}
+					meta[path] = pathMeta
+				}
+
+				for key, val := range c.Meta {
+					(*pathMeta)[key] = val
+				}
+			}
+		}
+	} else {
+		if err := CreateFullPath(z.conn, PathMetaPath, zk.WorldACL(zk.PermAll)); err != nil {
+			return meta, err
+		}
+	}
+
+	return meta, nil
 }
 
 func NewZookeeperClient(hosts []string, timeout time.Duration) (*ZookeeperClient, error) {

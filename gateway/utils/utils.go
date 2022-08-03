@@ -108,6 +108,27 @@ func PathToXPath(path *gnmi.Path) string {
 	return xPath
 }
 
+// Retrieve a gnmi path, trimming the following:
+//		* gnmi origin
+//		* gnmi target
+//		* key filters
+func GetTrimmedPath(prefix *gnmi.Path, path *gnmi.Path) string {
+	var xPath string
+
+	for _, elem := range prefix.Elem {
+		if elem.Name != "" {
+			xPath += "/" + elem.Name
+		}
+	}
+
+	for _, elem := range path.Elem {
+		if elem.Name != "" {
+			xPath += "/" + elem.Name
+		}
+	}
+	return xPath
+}
+
 func GetNumberValues(tv *gnmi.TypedValue) (float64, bool) {
 	if tv != nil && tv.Value != nil {
 		switch tv.Value.(type) {

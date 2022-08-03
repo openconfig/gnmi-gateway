@@ -12,6 +12,7 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders"
+	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/target"
@@ -23,6 +24,7 @@ const TargetPath = "/targets"
 const RequestPath = "/requests"
 const CertificatePath = "/certificates"
 const GlobalCertPath = "/certificates/global"
+const PathMetaPath = "/pathMeta"
 
 var _ loaders.TargetLoader = new(ZookeeperTargetLoader)
 
@@ -46,6 +48,9 @@ type CredentialsConfig struct {
 type RequestConfig struct {
 	Target string   `yaml:"target"`
 	Paths  []string `yaml:"paths"`
+	// metadata associated with the specified gnmi paths, used by the gnmi-gw
+	// exporters.
+	PathMeta map[string]string `yaml:"pathMeta"`
 	// Subscription mode to be used:
 	// 0: SubscriptionMode_TARGET_DEFINED - The target selects the relevant
 	// 										mode for each element.
@@ -74,6 +79,11 @@ type RequestConfig struct {
 type TargetConfig struct {
 	Connection map[string]ConnectionConfig `yaml:"connection"`
 	Request    map[string]RequestConfig    `yaml:"request"`
+}
+
+type PathMetaConfig struct {
+	Paths []string `yaml:"paths"`
+	Meta map[string]string `yaml:"meta"`
 }
 
 type ZookeeperTargetLoader struct {
@@ -168,6 +178,13 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 			goto Exit
 		}
 	}
+	if err := z.refreshPathMeta(); err != nil {
+		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh path metadata")
+		if err == zk.ErrConnectionClosed {
+			goto Exit
+		}
+	}
+
 	z.config.Log.Info().Msgf("[ZK] Starting zookeeper target monitoring")
 	if err := z.refreshTargetConfiguration(targetChan); err != nil {
 		z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh targets")
@@ -176,7 +193,7 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 		}
 	}
 
-	for _, watchPath := range []string{TargetPath, RequestPath, CertificatePath} {
+	for _, watchPath := range []string{TargetPath, RequestPath, CertificatePath, PathMetaPath} {
 		if err := z.refreshWatches(channelMap, watchPath); err != nil {
 			z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh watches")
 			if err == zk.ErrConnectionClosed {
@@ -209,10 +226,10 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 
 			delete(channelMap, event.Path)
 
-			if slices.Contains([]string{TargetPath, RequestPath, CertificatePath}, event.Path) {
+			if slices.Contains([]string{TargetPath, RequestPath, CertificatePath, PathMetaPath}, event.Path) {
 				z.config.Log.Info().Msg("[ZK] Detected deletion of root config path, recreating: " + event.Path)
 				if err := z.zkClient.createNode(event.Path); err != nil {
-					z.config.Log.Error().Err(err).Msgf("[ZK] Unable to recreate node ", event.Path)
+					z.config.Log.Error().Err(err).Msgf("[ZK] Unable to recreate node %s", event.Path)
 				}
 				if err := z.refreshWatches(channelMap, event.Path); err != nil {
 					z.config.Log.Error().Err(err).Msgf("[ZK] Unable to refresh watches")
@@ -228,6 +245,14 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 
 			if strings.Contains(event.Path, CertificatePath) {
 				if err := z.refreshGlobalConfig(z.config.Log, targetChan, z.config); err != nil {
+					z.config.Log.Error().Err(err).Msgf("Unable to refresh config at path: '%s' - '%s'", event.Path, err)
+					if err == zk.ErrConnectionClosed {
+						goto Exit
+					}
+				}
+			} else if strings.Contains(event.Path, PathMetaPath) {
+				err := z.refreshPathMeta()
+				if err != nil {
 					z.config.Log.Error().Err(err).Msgf("Unable to refresh config at path: '%s' - '%s'", event.Path, err)
 					if err == zk.ErrConnectionClosed {
 						goto Exit
@@ -254,6 +279,14 @@ func (z *ZookeeperTargetLoader) WatchConfiguration(targetChan chan<- *connection
 
 			if strings.Contains(event.Path, CertificatePath) {
 				if err := z.refreshGlobalConfig(z.config.Log, targetChan, z.config); err != nil {
+					z.config.Log.Error().Err(err).Msgf("Unable to refresh config at path: '%s' - '%s'", event.Path, err)
+					if err == zk.ErrConnectionClosed {
+						goto Exit
+					}
+				}
+			} else if strings.Contains(event.Path, PathMetaPath) {
+				err := z.refreshPathMeta()
+				if err != nil {
 					z.config.Log.Error().Err(err).Msgf("Unable to refresh config at path: '%s' - '%s'", event.Path, err)
 					if err == zk.ErrConnectionClosed {
 						goto Exit
@@ -294,7 +327,7 @@ func (z *ZookeeperTargetLoader) refreshWatches(channelMap map[string]<-chan zk.E
 		if err := z.zkClient.createNode(cleanPath); err != nil {
 			return err
 		}
-		_, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(CertificatePath)
+		_, _, zkChildrenEvents, err = z.zkClient.conn.ChildrenW(cleanPath)
 	}
 
 	if err != nil {
@@ -367,6 +400,12 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 				SuppressRedundant: request.SuppressRedundant,
 				HeartbeatInterval: request.HeartbeatInterval,
 			})
+
+			if len(request.PathMeta) > 0 {
+				z.config.AddPathMetadata(
+					utils.GetTrimmedPath(&gnmi.Path{}, path),
+					request.PathMeta)
+			}
 		}
 		found := false
 		for targetName := range configs.Target {
