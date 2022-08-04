@@ -293,3 +293,12 @@ func (c *GatewayConfig) AddPathMetadata(path string, meta map[string]string) {
 		(*pathMeta)[key] = val
 	}
 }
+
+func (c *GatewayConfig) ReplacePathMetadata(
+	meta map[string]*map[string]string,
+) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.pathMeta = meta
+}

@@ -12,7 +12,6 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/loaders"
-	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/target"
@@ -48,9 +47,6 @@ type CredentialsConfig struct {
 type RequestConfig struct {
 	Target string   `yaml:"target"`
 	Paths  []string `yaml:"paths"`
-	// metadata associated with the specified gnmi paths, used by the gnmi-gw
-	// exporters.
-	PathMeta map[string]string `yaml:"pathMeta"`
 	// Subscription mode to be used:
 	// 0: SubscriptionMode_TARGET_DEFINED - The target selects the relevant
 	// 										mode for each element.
@@ -400,12 +396,6 @@ func (z *ZookeeperTargetLoader) zookeeperToTargets(t *TargetConfig) (*targetpb.C
 				SuppressRedundant: request.SuppressRedundant,
 				HeartbeatInterval: request.HeartbeatInterval,
 			})
-
-			if len(request.PathMeta) > 0 {
-				z.config.AddPathMetadata(
-					utils.GetTrimmedPath(&gnmi.Path{}, path),
-					request.PathMeta)
-			}
 		}
 		found := false
 		for targetName := range configs.Target {
