@@ -72,22 +72,11 @@ func (z *ZookeeperTargetLoader) refreshGlobalConfig(log zerolog.Logger, targetCh
 }
 
 func (z *ZookeeperTargetLoader) refreshPathMeta() error {
-	// TODO: right now, the path metadata is specified using
-	// /pathMeta/$groupName Zookeeper nodes *and* as part of the gnmi requests
-	// at /requests/$requestID.
-	//
-	// The issue is that a single path may receive metadata from multiple sources,
-	// which makes it difficult to perform cleanups.
-	//
-	// We should unify the above, perhaps moving request path metadata
-	// to something like /pathMeta/$requestID-meta.
 	meta, err := z.zkClient.getPathMeta(z.config.Log)
 	if err != nil {
 		return err
 	}
-	for key, val := range meta {
-		z.config.AddPathMetadata(key, *val)
-	}
+	z.config.ReplacePathMetadata(meta)
 	return nil
 }
 
