@@ -82,6 +82,11 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		metric.Value = value
+		metric.Namespace = e.config.GetPathMetadata(utils.GetTrimmedPath(notification.Prefix, update.Path))["Namespace"]
+
+		if metric.Namespace == "" {
+			metric.Namespace = "Default"
+		}
 
 		elems, keys, err := extractPrefixAndPathKeys(notification.GetPrefix(), update.GetPath())
 		if err != nil {
@@ -119,7 +124,6 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 						point.Tags[fieldName] = fieldVal
 					}
 				}
-
 			} else {
 				e.config.Log.Error().Msg("Target config not found for target: " + point.Tags["target"])
 				return
@@ -136,8 +140,6 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		metric.Dims = point.Tags
 		metric.Account = metric.Dims["Account"]
 		delete(metric.Dims, "Account")
-
-		metric.Namespace = "Interface metrics"
 
 		metricJSON, err := json.Marshal(metric)
 
