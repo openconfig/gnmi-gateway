@@ -23,8 +23,8 @@ import (
 	"strconv"
 	"time"
 
+	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/google/gnxi/utils/xpath"
-	"github.com/netbox-community/go-netbox/netbox"
 	"github.com/netbox-community/go-netbox/netbox/client"
 	"github.com/netbox-community/go-netbox/netbox/client/dcim"
 	"github.com/openconfig/gnmi/proto/gnmi"
@@ -131,10 +131,30 @@ func (m *NetBoxTargetLoader) GetConfiguration() (*targetpb.Configuration, error)
 }
 
 func (m *NetBoxTargetLoader) Start() error {
-	m.client = netbox.NewNetboxWithAPIKey(
-		m.config.TargetLoaders.NetBoxHost,
-		m.config.TargetLoaders.NetBoxAPIKey,
-	)
+	var scheme = "https"
+	var transport *httptransport.Runtime
+	var basePath = client.DefaultBasePath
+
+	if m.config.TargetLoaders.Insecure {
+		scheme = "http"
+	}
+
+	if len(m.config.TargetLoaders.NetBoxBasePath) > 0 {
+		basePath = m.config.TargetLoaders.NetBoxBasePath
+	}
+
+	if !m.config.TargetLoaders.Insecure && m.config.TargetLoaders.NoTLSVerify {
+		tlsClient, err := httptransport.TLSClient(httptransport.TLSClientOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return err
+		}
+		transport = httptransport.NewWithClient(m.config.TargetLoaders.NetBoxHost, basePath, []string{scheme}, tlsClient)
+	} else {
+		transport = httptransport.New(m.config.TargetLoaders.NetBoxHost, basePath, []string{scheme})
+	}
+
+	transport.DefaultAuthentication = httptransport.APIKeyAuth("Authorization", "header", "Token "+m.config.TargetLoaders.NetBoxAPIKey)
+	m.client = client.New(transport, nil)
 
 	_, err := m.GetConfiguration() // make sure there are no errors at startup
 	return err

@@ -146,6 +146,9 @@ type TargetLoadersConfig struct {
 	// Enabled contains the list of named target loaders that should be started.
 	Enabled []string `json:"enabled"`
 
+	// Insecure must be specified to connect to target loaders using http or some other cleartext protocol.
+	Insecure bool
+
 	// JSONFile is the path to a JSON file containing the configuration for
 	// gNMI targets and subscribe requests. The file will be checked for
 	// changes every TargetJSONFileReloadInterval.
@@ -155,6 +158,8 @@ type TargetLoadersConfig struct {
 
 	// NetBoxAPIKey is a valid API for the NetBox instance.
 	NetBoxAPIKey string
+	// NetBoxBasePath overrides the default NetBox client base path ("/api").
+	NetBoxBasePath string
 	// NetBoxDeviceGNMIPort is the port on the device that the gNMI server is
 	// running on.
 	NetBoxDeviceGNMIPort int
@@ -176,6 +181,9 @@ type TargetLoadersConfig struct {
 	// NetBoxSubscribePaths is a list of XPath subscription paths for the
 	// devices in NetBox.
 	NetBoxSubscribePaths []string
+
+	// NoTLSVerify must be specified to disable TLS verification to presumably secure target loaders.
+	NoTLSVerify bool
 
 	// SimpleFile is the path to a YAML file containing a simple target config.
 	SimpleFile string `json:"simple_file"`
