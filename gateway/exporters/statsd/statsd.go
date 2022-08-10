@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ const Name = "statsd"
 var _ exporters.Exporter = new(StatsdExporter)
 
 type Metric struct {
-	Account     string            `json:"Account"`
+	Account     string            `json:",omitempty"`
 	Measurement string            `json:"Metric"`
 	Namespace   string            `json:"Namespace"`
 	Dims        map[string]string `json:"Dims"`
@@ -68,6 +69,7 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		timestamp := time.Unix(0, notification.Timestamp)
 		beforeLimit := (time.Now()).Add(-30 * time.Minute)
 		afterLimit := (time.Now()).Add(4 * time.Minute)
+		//TODO Check if Geneva has timestamp limitations
 
 		if timestamp.Before(beforeLimit) || timestamp.After(afterLimit) {
 			return
@@ -82,11 +84,14 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		metric.Value = value
-		metric.Namespace = e.config.GetPathMetadata(utils.GetTrimmedPath(notification.Prefix, update.Path))["Namespace"]
 
+		path := utils.GetTrimmedPath(notification.Prefix, update.Path)
+		metric.Namespace = e.config.GetPathMetadata(path)["Namespace"]
 		if metric.Namespace == "" {
 			metric.Namespace = "Default"
 		}
+
+		metric.Account = os.Getenv("MDM_ACCOUNT")
 
 		elems, keys, err := extractPrefixAndPathKeys(notification.GetPrefix(), update.GetPath())
 		if err != nil {
@@ -138,8 +143,10 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		metric.Dims = point.Tags
-		metric.Account = metric.Dims["Account"]
-		delete(metric.Dims, "Account")
+
+		if resourceId := os.Getenv("EXTENSION_ARMID"); resourceId != "" {
+			metric.Dims["microsoft.resourceid"] = resourceId
+		}
 
 		metricJSON, err := json.Marshal(metric)
 
@@ -154,6 +161,7 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		val, isNumericValue := utils.GetNumberValues(update.Val)
+		// Modify logic based on path meta regarding metric type (metric/log)
 		if isNumericValue {
 			e.config.Log.Debug().Msgf("%s:%d|g", string(metricJSON), int64(val))
 			if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
@@ -162,9 +170,10 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		} else if reflect.TypeOf(metric.Value) == reflect.TypeOf((*gnmi.TypedValue_StringVal)(nil)) {
 			e.config.Log.Debug().Msgf("%s:%s|s", string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal))
 
-			if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
-			}
+			// TODO Handle logging instead of pushing as metric
+			// if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
+			// 	e.config.Log.Error().Msg(err.Error())
+			// }
 		} else {
 			e.config.Log.Debug().Msgf("Received metric of type: %s", reflect.TypeOf(metric.Value).String())
 		}
@@ -178,7 +187,10 @@ func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
 	e.connMgr = connMgr
 
 	var err error
-	e.client, err = statsd.NewClient(e.config.Exporters.StatsdHost, "")
+	// e.client, err = statsd.NewClient(e.config.Exporters.StatsdHost, "")
+	e.client, err = statsd.NewClientWithConfig(&statsd.ClientConfig{
+		Address: e.config.Exporters.StatsdHost,
+	})
 
 	if err != nil {
 		return err
@@ -210,7 +222,7 @@ func extractPrefixAndPathKeys(prefix *gnmipb.Path, metricPath *gnmipb.Path) ([]s
 	}
 
 	if len(elems) == 0 {
-		return elems, keys, errors.New("Path contains no elems")
+		return elems, keys, errors.New("path contains no elems")
 	}
 
 	return elems, keys, nil
