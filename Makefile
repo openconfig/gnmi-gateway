@@ -11,6 +11,10 @@ build: clean
 	go build -o gnmi-gateway $(GOFLAGS) .
 	./gnmi-gateway -version
 
+benchmark:
+	go build -o statsd-benchmark $(GOFLAGS) gateway/benchmarks/exporter/main.go
+	go build -o statsd-server $(GOFLAGS) gateway/benchmarks/statsd_server/cmd/main.go
+
 clean:
 	rm -f gnmi-gateway
 	rm -f cover.out

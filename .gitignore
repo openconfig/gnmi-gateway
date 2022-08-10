@@ -9,6 +9,9 @@ server.key
 
 # Emitted binary and releases
 gnmi-gateway
+statsd-benchmark
+statsd-server
+
 release/
 
 # OpenConfig models download
