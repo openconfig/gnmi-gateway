@@ -184,7 +184,11 @@ func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
 	e.connMgr = connMgr
 
 	var err error
-	e.client, err = statsd.NewClient(e.config.Exporters.StatsdHost, "")
+	e.client, err = statsd.NewBufferedClient(
+		e.config.Exporters.StatsdHost, "",
+		time.Duration(300) * time.Millisecond, // flush interval
+		0, // flush size - default
+	)
 
 	if err != nil {
 		return err
