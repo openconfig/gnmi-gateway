@@ -27,6 +27,8 @@ type Metric struct {
 	Measurement string            `json:"Metric"`
 	Namespace   string            `json:"Namespace"`
 	Dims        map[string]string `json:"Dims"`
+	// ns since epoch
+	Timestamp   int64			  `json:"Timestamp"`
 	Value       interface{}       `json:"-"`
 }
 
@@ -63,7 +65,9 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 			Fields: make(map[string]interface{}),
 		}
 
-		metric := Metric{}
+		metric := Metric{
+			Timestamp: notification.Timestamp,
+		}
 
 		timestamp := time.Unix(0, notification.Timestamp)
 		beforeLimit := (time.Now()).Add(-30 * time.Minute)
@@ -115,18 +119,20 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 
 			point.Tags = keys
 
-			targetConfig, found := (*e.connMgr).GetTargetConfig(point.Tags["target"])
+			if e.connMgr != nil {
+				targetConfig, found := (*e.connMgr).GetTargetConfig(point.Tags["target"])
 
-			if found {
-				for _, fieldName := range e.config.ExporterMetadataAllowlist {
-					fieldVal, exists := targetConfig.Meta[fieldName]
-					if exists {
-						point.Tags[fieldName] = fieldVal
+				if found {
+					for _, fieldName := range e.config.ExporterMetadataAllowlist {
+						fieldVal, exists := targetConfig.Meta[fieldName]
+						if exists {
+							point.Tags[fieldName] = fieldVal
+						}
 					}
+				} else {
+					e.config.Log.Error().Msg("Target config not found for target: " + point.Tags["target"])
+					return
 				}
-			} else {
-				e.config.Log.Error().Msg("Target config not found for target: " + point.Tags["target"])
-				return
 			}
 		}
 
