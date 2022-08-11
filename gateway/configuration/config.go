@@ -159,6 +159,10 @@ type ExportersConfig struct {
 
 	// StatsdHost is the target address for the statsd exporter
 	StatsdHost string `json:"statsd_host"`
+	// FluentHost is the target address for the fluentd target
+	FluentHost string `json:"fluent_host"`
+	// FluentPort is the target port for the fluentd target
+	FluentPort int `json:"fluent_port"`
 }
 
 type TargetLoadersConfig struct {
@@ -209,7 +213,7 @@ func NewDefaultGatewayConfig() *GatewayConfig {
 		Exporters:     new(ExportersConfig),
 		Log:           zerolog.New(os.Stderr).With().Timestamp().Logger().Level(zerolog.InfoLevel),
 		TargetLoaders: new(TargetLoadersConfig),
-		pathMeta: make(map[string]*map[string]string, 0),
+		pathMeta:      make(map[string]*map[string]string, 0),
 	}
 	return config
 }
