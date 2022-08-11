@@ -5,17 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
 	"github.com/cactus/go-statsd-client/v5/statsd"
+	"github.com/fluent/fluent-logger-golang/fluent"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/ctree"
-	"github.com/openconfig/gnmi/proto/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -50,6 +49,7 @@ type StatsdExporter struct {
 	config  *configuration.GatewayConfig
 	connMgr *connections.ConnectionManager
 	client  statsd.Statter
+	logger  *fluent.Fluent
 }
 
 func (e *StatsdExporter) Name() string {
@@ -90,8 +90,6 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		if metric.Namespace == "" {
 			metric.Namespace = "Default"
 		}
-
-		metric.Account = os.Getenv("MDM_ACCOUNT")
 
 		elems, keys, err := extractPrefixAndPathKeys(notification.GetPrefix(), update.GetPath())
 		if err != nil {
@@ -144,38 +142,35 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 
 		metric.Dims = point.Tags
 
-		if resourceId := os.Getenv("EXTENSION_ARMID"); resourceId != "" {
-			metric.Dims["microsoft.resourceid"] = resourceId
-		}
+		notificationType := e.config.GetPathMetadata(path)["type"]
 
-		metricJSON, err := json.Marshal(metric)
+		if notificationType == "" || notificationType == "metric" || notificationType == "metricAndLog" {
+			metric.Account = os.Getenv("MDM_ACCOUNT")
 
-		if err != nil {
-			e.config.Log.Error().Msg("Failed to marshal point into JSON")
-			return
-		}
-
-		if err != nil {
-			e.config.Log.Error().Msg(err.Error())
-			return
-		}
-
-		val, isNumericValue := utils.GetNumberValues(update.Val)
-		// Modify logic based on path meta regarding metric type (metric/log)
-		if isNumericValue {
-			e.config.Log.Debug().Msgf("%s:%d|g", string(metricJSON), int64(val))
-			if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
+			if resourceId := os.Getenv("EXTENSION_ARMID"); resourceId != "" {
+				metric.Dims["microsoft.resourceid"] = resourceId
 			}
-		} else if reflect.TypeOf(metric.Value) == reflect.TypeOf((*gnmi.TypedValue_StringVal)(nil)) {
-			e.config.Log.Debug().Msgf("%s:%s|s", string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal))
 
-			// TODO Handle logging instead of pushing as metric
-			// if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
-			// 	e.config.Log.Error().Msg(err.Error())
-			// }
-		} else {
-			e.config.Log.Debug().Msgf("Received metric of type: %s", reflect.TypeOf(metric.Value).String())
+			metricJSON, err := json.Marshal(metric)
+
+			if err != nil {
+				e.config.Log.Error().Msg("Failed to marshal point into JSON")
+				return
+			}
+
+			val, isNumericValue := utils.GetNumberValues(update.Val)
+			if isNumericValue {
+				e.config.Log.Debug().Msgf("%s:%d|g", string(metricJSON), int64(val))
+				if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
+					e.config.Log.Error().Msg(err.Error())
+				}
+			}
+		}
+
+		if notificationType == "log" || notificationType == "metricAndLog" {
+			if err := e.logger.Post(metric.Measurement, metric); err != nil {
+				e.config.Log.Error().Msg("failed emmiting event log to fluentd")
+			}
 		}
 	}
 }
@@ -195,6 +190,11 @@ func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
 	if err != nil {
 		return err
 	}
+
+	e.logger, err = fluent.New(fluent.Config{
+		FluentHost: e.config.Exporters.FluentHost,
+		FluentPort: e.config.Exporters.FluentPort,
+	})
 
 	return nil
 }
