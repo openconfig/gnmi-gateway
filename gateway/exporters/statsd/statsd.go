@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"strconv"
 	"time"
 
 	"github.com/cactus/go-statsd-client/v5/statsd"
@@ -115,18 +116,20 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 
 			point.Tags = keys
 
-			targetConfig, found := (*e.connMgr).GetTargetConfig(point.Tags["target"])
+			if e.connMgr != nil {
+				targetConfig, found := (*e.connMgr).GetTargetConfig(point.Tags["target"])
 
-			if found {
-				for _, fieldName := range e.config.ExporterMetadataAllowlist {
-					fieldVal, exists := targetConfig.Meta[fieldName]
-					if exists {
-						point.Tags[fieldName] = fieldVal
+				if found {
+					for _, fieldName := range e.config.ExporterMetadataAllowlist {
+						fieldVal, exists := targetConfig.Meta[fieldName]
+						if exists {
+							point.Tags[fieldName] = fieldVal
+						}
 					}
+				} else {
+					e.config.Log.Error().Msg("Target config not found for target: " + point.Tags["target"])
+					return
 				}
-			} else {
-				e.config.Log.Error().Msg("Target config not found for target: " + point.Tags["target"])
-				return
 			}
 		}
 
@@ -140,6 +143,9 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		metric.Dims = point.Tags
 		metric.Account = metric.Dims["Account"]
 		delete(metric.Dims, "Account")
+		// ns since epoch
+		metric.Dims["timestamp"] = strconv.FormatInt(notification.Timestamp, 10)
+
 
 		metricJSON, err := json.Marshal(metric)
 
@@ -178,7 +184,11 @@ func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
 	e.connMgr = connMgr
 
 	var err error
-	e.client, err = statsd.NewClient(e.config.Exporters.StatsdHost, "")
+	e.client, err = statsd.NewBufferedClient(
+		e.config.Exporters.StatsdHost, "",
+		time.Duration(300) * time.Millisecond, // flush interval
+		0, // flush size - default
+	)
 
 	if err != nil {
 		return err
