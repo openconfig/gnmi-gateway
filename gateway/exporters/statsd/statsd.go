@@ -143,7 +143,7 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		metric.Dims = point.Tags
 
 		notificationType := e.config.GetPathMetadata(path)["type"]
-
+		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
 		if notificationType == "" || notificationType == "metric" || notificationType == "metricAndLog" {
 			metric.Account = os.Getenv("MDM_ACCOUNT")
 
@@ -167,7 +167,7 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 			}
 		}
 
-		if notificationType == "log" || notificationType == "metricAndLog" {
+		if e.logger != nil && (notificationType == "log" || notificationType == "metricAndLog") {
 			if err := e.logger.Post(metric.Measurement, metric); err != nil {
 				e.config.Log.Error().Msg("failed emmiting event log to fluentd")
 			}
@@ -191,12 +191,14 @@ func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
 		return err
 	}
 
-	e.logger, err = fluent.New(fluent.Config{
-		FluentHost: e.config.Exporters.FluentHost,
-		FluentPort: e.config.Exporters.FluentPort,
-	})
+	if e.config.Exporters.FluentHost != "" {
+		e.logger, err = fluent.New(fluent.Config{
+			FluentHost: e.config.Exporters.FluentHost,
+			FluentPort: e.config.Exporters.FluentPort,
+		})
+	}
 
-	return nil
+	return err
 }
 
 func pathToMetricName(metricPath string) string {
