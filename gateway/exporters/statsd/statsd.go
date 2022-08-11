@@ -210,13 +210,8 @@ func extractPrefixAndPathKeys(prefix *gnmipb.Path, metricPath *gnmipb.Path) ([]s
 		for _, e := range metricPath.Elem {
 			name := e.Name
 			elems = append(elems, name)
-
 			for k, v := range e.GetKey() {
-				if _, ok := keys[k]; ok {
-					keys[name+"/"+k] = v
-				} else {
-					keys[k] = v
-				}
+				keys[e.Name+"_"+k] = v
 			}
 		}
 	}
