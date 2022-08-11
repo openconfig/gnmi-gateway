@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"strconv"
 	"time"
 
 	"github.com/cactus/go-statsd-client/v5/statsd"
@@ -27,8 +28,6 @@ type Metric struct {
 	Measurement string            `json:"Metric"`
 	Namespace   string            `json:"Namespace"`
 	Dims        map[string]string `json:"Dims"`
-	// ns since epoch
-	Timestamp   int64			  `json:"Timestamp"`
 	Value       interface{}       `json:"-"`
 }
 
@@ -65,9 +64,7 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 			Fields: make(map[string]interface{}),
 		}
 
-		metric := Metric{
-			Timestamp: notification.Timestamp,
-		}
+		metric := Metric{}
 
 		timestamp := time.Unix(0, notification.Timestamp)
 		beforeLimit := (time.Now()).Add(-30 * time.Minute)
@@ -146,6 +143,9 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		metric.Dims = point.Tags
 		metric.Account = metric.Dims["Account"]
 		delete(metric.Dims, "Account")
+		// ns since epoch
+		metric.Dims["timestamp"] = strconv.FormatInt(notification.Timestamp, 10)
+
 
 		metricJSON, err := json.Marshal(metric)
 

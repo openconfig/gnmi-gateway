@@ -20,7 +20,7 @@ import (
 
 
 var (
-	timestampRe, _ = regexp.Compile("Timestamp.?.?: ?([0-9]+)")
+	timestampRe, _ = regexp.Compile("[tT]imestamp.?.?: ?\"?([0-9]+)")
 )
 
 const (
