@@ -169,7 +169,7 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 
 		if e.logger != nil && (notificationType == "log" || notificationType == "metricAndLog") {
 			if err := e.logger.Post(metric.Measurement, metric); err != nil {
-				e.config.Log.Error().Msg("failed emmiting event log to fluentd")
+				e.config.Log.Error().Msg("failed emmiting event log to fluentd: " + err.Error())
 			}
 		}
 	}
@@ -192,9 +192,12 @@ func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
 	}
 
 	if e.config.Exporters.FluentHost != "" {
+		// TODO: Perhaps add some exporter config parameters for config values
 		e.logger, err = fluent.New(fluent.Config{
-			FluentHost: e.config.Exporters.FluentHost,
-			FluentPort: e.config.Exporters.FluentPort,
+			FluentHost:             e.config.Exporters.FluentHost,
+			FluentPort:             e.config.Exporters.FluentPort,
+			Async:                  true,
+			AsyncReconnectInterval: 500,
 		})
 	}
 
