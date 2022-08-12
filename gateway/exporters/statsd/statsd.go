@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -19,6 +18,9 @@ import (
 )
 
 const Name = "statsd"
+const MetricType = "metric"
+const LogType = "log"
+const LoggedMetricType = "loggedMetric"
 
 var _ exporters.Exporter = new(StatsdExporter)
 
@@ -46,10 +48,10 @@ func NewStatsdExporter(config *configuration.GatewayConfig) exporters.Exporter {
 }
 
 type StatsdExporter struct {
-	config  *configuration.GatewayConfig
-	connMgr *connections.ConnectionManager
-	client  statsd.Statter
-	logger  *fluent.Fluent
+	config       *configuration.GatewayConfig
+	connMgr      *connections.ConnectionManager
+	client       statsd.Statter
+	fluentLogger *fluent.Fluent
 }
 
 func (e *StatsdExporter) Name() string {
@@ -144,11 +146,16 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 
 		notificationType := e.config.GetPathMetadata(path)["type"]
 		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
-		if notificationType == "" || notificationType == "metric" || notificationType == "metricAndLog" {
-			metric.Account = os.Getenv("MDM_ACCOUNT")
+		if notificationType == "" || notificationType == MetricType || notificationType == LoggedMetricType {
+			metric.Account = e.config.Exporters.GenevaMdmAccount
+			if e.config.Exporters.GenevaMdmAccount == "" {
+				e.config.Log.Warn().Msg("geneva MDM account is not set in exporter; metrics will be discarded by the MDM agent")
+			}
 
-			if resourceId := os.Getenv("EXTENSION_ARMID"); resourceId != "" {
+			if resourceId := e.config.Exporters.ExtensionArmId; resourceId != "" {
 				metric.Dims["microsoft.resourceid"] = resourceId
+			} else {
+				e.config.Log.Warn().Msg("extension ARM ID is not set in Geneva exporter; metrics will be discarded by the MDM agent")
 			}
 
 			metricJSON, err := json.Marshal(metric)
@@ -167,8 +174,8 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 			}
 		}
 
-		if e.logger != nil && (notificationType == "log" || notificationType == "metricAndLog") {
-			if err := e.logger.Post(metric.Measurement, metric); err != nil {
+		if e.fluentLogger != nil && (notificationType == LogType || notificationType == LoggedMetricType) {
+			if err := e.fluentLogger.Post(metric.Measurement, metric); err != nil {
 				e.config.Log.Error().Msg("failed emmiting event log to fluentd: " + err.Error())
 			}
 		}
@@ -193,7 +200,7 @@ func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
 
 	if e.config.Exporters.FluentHost != "" {
 		// TODO: Perhaps add some exporter config parameters for config values
-		e.logger, err = fluent.New(fluent.Config{
+		e.fluentLogger, err = fluent.New(fluent.Config{
 			FluentHost:             e.config.Exporters.FluentHost,
 			FluentPort:             e.config.Exporters.FluentPort,
 			Async:                  true,
