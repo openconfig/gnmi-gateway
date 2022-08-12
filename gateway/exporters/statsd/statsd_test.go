@@ -25,7 +25,9 @@ var serverAddress = "127.0.0.1:8125"
 
 var config = &configuration.GatewayConfig{
 	Exporters: &configuration.ExportersConfig{
-		StatsdHost: serverAddress,
+		StatsdHost:       serverAddress,
+		GenevaMdmAccount: "testMDM",
+		ExtensionArmId:   "testARMID",
 	},
 	ZookeeperTimeout:          30 * time.Second,
 	ExporterMetadataAllowlist: []string{"Account"},
@@ -51,6 +53,7 @@ func TestStatsdExporter_Name(t *testing.T) {
 }
 
 func TestStatsdExporter_Export(t *testing.T) {
+	os.Setenv("ZOOKEEPER_HOSTS", "172.17.0.2")
 	config.ZookeeperHosts = []string{os.Getenv("ZOOKEEPER_HOSTS")}
 	connMgr, err := createZKTargets(t)
 	assert.Nil(t, err)
@@ -67,6 +70,7 @@ func TestStatsdExporter_Export(t *testing.T) {
 	}
 
 	go output.listenUDP(done)
+	// TODO: Add mock fluentd receiver
 
 	assert.NotPanics(t, func() {
 		err = e.Start(&connMgr)
@@ -102,8 +106,8 @@ func (output *MutexStringSlice) listenUDP(done chan bool) {
 func (output *MutexStringSlice) testOutput(t assert.TestingT) {
 	output.mu.Lock()
 	defer output.mu.Unlock()
-	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Interface metrics\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\",\"testKey\":\"testVal\"}}:1|g")
-	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Interface metrics\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\"}}:test|s")
+	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Default\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\",\"path0_testKey\":\"testVal\"}}:1|g")
+	assert.Contains(t, output.s, "{\"Account\":\"test\",\"Metric\":\"path0\",\"Namespace\":\"Default\",\"Dims\":{\"origin\":\"b\",\"path\":\"path0\",\"target\":\"test_target0\"}}:test|s")
 }
 
 func createStatsdServer() (*net.UDPConn, error) {
@@ -221,7 +225,7 @@ var testTargetConfig = &zookeeper.TargetConfig{
 		"default": {
 			Target: "*",
 			Paths: []string{
-				"/components",
+				"/components/component[name=CPU0]/cpu/utilization/state",
 			},
 		},
 		"unused": {
