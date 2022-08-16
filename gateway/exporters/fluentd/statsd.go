@@ -1,14 +1,13 @@
-package statsd
+package fluentd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/cactus/go-statsd-client/v5/statsd"
+	"github.com/fluent/fluent-logger-golang/fluent"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
 	"github.com/openconfig/gnmi-gateway/gateway/connections"
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
@@ -17,13 +16,14 @@ import (
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
-const Name = "statsd"
+const Name = "fluentd"
 const MetricType = "metric"
 const LogType = "log"
 const LoggedMetricType = "loggedMetric"
 
-var _ exporters.Exporter = new(StatsdExporter)
+var _ exporters.Exporter = new(FluentdExporter)
 
+// TODO: Change struct fields according to geneva mds log reqs
 type Metric struct {
 	Account     string            `json:",omitempty"`
 	Measurement string            `json:"Metric"`
@@ -38,26 +38,26 @@ type Point struct {
 }
 
 func init() {
-	exporters.Register(Name, NewStatsdExporter)
+	exporters.Register(Name, NewFluentdExporter)
 }
 
-func NewStatsdExporter(config *configuration.GatewayConfig) exporters.Exporter {
-	return &StatsdExporter{
+func NewFluentdExporter(config *configuration.GatewayConfig) exporters.Exporter {
+	return &FluentdExporter{
 		config: config,
 	}
 }
 
-type StatsdExporter struct {
-	config  *configuration.GatewayConfig
-	connMgr *connections.ConnectionManager
-	client  statsd.Statter
+type FluentdExporter struct {
+	config       *configuration.GatewayConfig
+	connMgr      *connections.ConnectionManager
+	fluentLogger *fluent.Fluent
 }
 
-func (e *StatsdExporter) Name() string {
+func (e *FluentdExporter) Name() string {
 	return Name
 }
 
-func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
+func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 	notification := leaf.Value().(*gnmipb.Notification)
 
 	for _, update := range notification.Update {
@@ -149,53 +149,35 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 
 		notificationType := e.config.GetPathMetadata(path)["type"]
 		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
-		if notificationType == "" || notificationType == MetricType || notificationType == LoggedMetricType {
-			metric.Account = e.config.Exporters.GenevaMdmAccount
-			if e.config.Exporters.GenevaMdmAccount == "" {
-				e.config.Log.Warn().Msg("geneva MDM account is not set in exporter; metrics will be discarded by the MDM agent")
-			}
 
-			if resourceId := e.config.Exporters.ExtensionArmId; resourceId != "" {
-				metric.Dims["microsoft.resourceid"] = resourceId
-			} else {
-				e.config.Log.Warn().Msg("extension ARM ID is not set in Geneva exporter; metrics will be discarded by the MDM agent")
-			}
-
-			metricJSON, err := json.Marshal(metric)
-
-			if err != nil {
-				e.config.Log.Error().Msg("Failed to marshal point into JSON")
-				return
-			}
-
-			val, isNumericValue := utils.GetNumberValues(update.Val)
-			if isNumericValue {
-				e.config.Log.Debug().Msgf("%s:%d|g", string(metricJSON), int64(val))
-				if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
-					e.config.Log.Error().Msg(err.Error())
-				}
+		if e.fluentLogger != nil && (notificationType == LogType || notificationType == LoggedMetricType) {
+			if err := e.fluentLogger.Post(metric.Measurement, metric); err != nil {
+				e.config.Log.Error().Msg("failed emmiting event log to fluentd: " + err.Error())
 			}
 		}
 	}
 }
 
-func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
+func (e *FluentdExporter) Start(connMgr *connections.ConnectionManager) error {
 
-	e.config.Log.Info().Msg("Starting Statsd exporter.")
+	e.config.Log.Info().Msg("Starting Fluentd exporter.")
 
 	e.connMgr = connMgr
 
 	var err error
 
-	// TODO: Resolve deprecated
-	e.client, err = statsd.NewBufferedClient(
-		e.config.Exporters.StatsdHost, "",
-		time.Duration(300)*time.Millisecond, // flush interval
-		0,                                   // flush size - default
-	)
-
 	if err != nil {
 		return err
+	}
+
+	if e.config.Exporters.FluentHost != "" {
+		// TODO: Perhaps add some exporter config parameters for config values
+		e.fluentLogger, err = fluent.New(fluent.Config{
+			FluentHost:             e.config.Exporters.FluentHost,
+			FluentPort:             e.config.Exporters.FluentPort,
+			Async:                  true,
+			AsyncReconnectInterval: 500,
+		})
 	}
 
 	return err
