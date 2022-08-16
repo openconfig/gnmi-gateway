@@ -151,14 +151,9 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
 		if notificationType == "" || notificationType == MetricType || notificationType == LoggedMetricType {
 			metric.Account = e.config.Exporters.GenevaMdmAccount
-			if e.config.Exporters.GenevaMdmAccount == "" {
-				e.config.Log.Warn().Msg("geneva MDM account is not set in exporter; metrics will be discarded by the MDM agent")
-			}
 
 			if resourceId := e.config.Exporters.ExtensionArmId; resourceId != "" {
 				metric.Dims["microsoft.resourceid"] = resourceId
-			} else {
-				e.config.Log.Warn().Msg("extension ARM ID is not set in Geneva exporter; metrics will be discarded by the MDM agent")
 			}
 
 			metricJSON, err := json.Marshal(metric)
@@ -193,6 +188,13 @@ func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
 		time.Duration(300)*time.Millisecond, // flush interval
 		0,                                   // flush size - default
 	)
+
+	if e.config.Exporters.GenevaMdmAccount == "" {
+		e.config.Log.Warn().Msg("geneva MDM account is not set in exporter; metrics will be discarded by the MDM agent")
+	}
+	if e.config.Exporters.ExtensionArmId == "" {
+		e.config.Log.Warn().Msg("extension ARM ID is not set in Geneva exporter; metrics will be discarded by the MDM agent")
+	}
 
 	if err != nil {
 		return err

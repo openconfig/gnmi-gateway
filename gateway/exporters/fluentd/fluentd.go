@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/fluent/fluent-logger-golang/fluent"
 	"github.com/openconfig/gnmi-gateway/gateway/configuration"
@@ -17,24 +16,17 @@ import (
 )
 
 const Name = "fluentd"
-const MetricType = "metric"
+const MetricType = "log"
 const LogType = "log"
 const LoggedMetricType = "loggedMetric"
 
 var _ exporters.Exporter = new(FluentdExporter)
 
 // TODO: Change struct fields according to geneva mds log reqs
-type Metric struct {
-	Account     string            `json:",omitempty"`
-	Measurement string            `json:"Metric"`
-	Namespace   string            `json:"Namespace"`
-	Dims        map[string]string `json:"Dims"`
-	Value       interface{}       `json:"-"`
-}
-
-type Point struct {
-	Tags   map[string]string
-	Fields map[string]interface{}
+type Log struct {
+	Event string            `msg:"eventName"`
+	Meta  map[string]string `msg:"meta"`
+	Value interface{}       `msg:"value"`
 }
 
 func init() {
@@ -61,22 +53,7 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 	notification := leaf.Value().(*gnmipb.Notification)
 
 	for _, update := range notification.Update {
-		point := Point{
-			Fields: make(map[string]interface{}),
-		}
-
-		metric := Metric{}
-
-		timestamp := time.Unix(0, notification.Timestamp)
-		beforeLimit := (time.Now()).Add(-30 * time.Minute)
-		afterLimit := (time.Now()).Add(4 * time.Minute)
-		//TODO Check if Geneva has timestamp limitations
-
-		if timestamp.Before(beforeLimit) || timestamp.After(afterLimit) {
-			return
-		}
-
-		var name string
+		log := Log{}
 
 		value, valid := utils.GetValues(update.Val)
 
@@ -84,22 +61,16 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 			continue
 		}
 
-		metric.Value = value
+		log.Value = value
 
 		path := utils.GetTrimmedPath(notification.Prefix, update.Path)
-		metric.Namespace = e.config.GetPathMetadata(path)["Namespace"]
-		if metric.Namespace == "" {
-			metric.Namespace = "Default"
-		}
 
 		elems, keys, err := extractPrefixAndPathKeys(notification.GetPrefix(), update.GetPath())
 		if err != nil {
 			e.config.Log.Info().Msg(fmt.Sprintf("Failed to extract path or keys: %s", err))
 		}
 
-		name, elems = elems[len(elems)-1], elems[:len(elems)-1]
-
-		if metric.Measurement == "" {
+		if log.Event == "" {
 			measurementPath := strings.Join(elems, "/")
 
 			p := notification.GetPrefix()
@@ -115,45 +86,47 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 				keys["target"] = target
 			}
 
-			metric.Measurement = pathToMetricName(measurementPath)
+			log.Event = pathToMetricName(measurementPath)
 
-			point.Tags = keys
+			log.Meta = keys
 
 			if e.connMgr != nil {
-				targetConfig, found := (*e.connMgr).GetTargetConfig(point.Tags["target"])
+				targetConfig, found := (*e.connMgr).GetTargetConfig(log.Meta["target"])
 
 				if found {
 					for _, fieldName := range e.config.ExporterMetadataAllowlist {
 						fieldVal, exists := targetConfig.Meta[fieldName]
 						if exists {
-							point.Tags[fieldName] = fieldVal
+							log.Meta[fieldName] = fieldVal
 						}
 					}
 				} else {
-					e.config.Log.Error().Msg("Target config not found for target: " + point.Tags["target"])
+					e.config.Log.Error().Msg("Target config not found for target: " + log.Meta["target"])
 					return
 				}
 			}
 		}
 
-		point.Fields[pathToMetricName(name)] = value
-
-		if metric.Measurement == "" {
-			e.config.Log.Info().Msg("Point measurement is empty. Returning.")
+		if log.Event == "" {
+			e.config.Log.Info().Msg("Point event is empty. Returning.")
 			return
 		}
 
-		metric.Dims = point.Tags
+		// TODO: add flag to mage timestamp optional
 		// ns since epoch
-		metric.Dims["timestamp"] = strconv.FormatInt(notification.Timestamp, 10)
+		log.Meta["timestamp"] = strconv.FormatInt(notification.Timestamp, 10)
 
 		notificationType := e.config.GetPathMetadata(path)["type"]
 		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
 
 		if e.fluentLogger != nil && (notificationType == LogType || notificationType == LoggedMetricType) {
-			if err := e.fluentLogger.Post(metric.Measurement, metric); err != nil {
+			if err := e.fluentLogger.Post(log.Event, log); err != nil {
 				e.config.Log.Error().Msg("failed emmiting event log to fluentd: " + err.Error())
 			}
+			// Remove me
+			//  else {
+			// 	e.config.Log.Debug().Msgf("Logged: [ %s ] : [ %v ]", log.Event, log)
+			// }
 		}
 	}
 }
@@ -175,6 +148,8 @@ func (e *FluentdExporter) Start(connMgr *connections.ConnectionManager) error {
 		e.fluentLogger, err = fluent.New(fluent.Config{
 			FluentHost:             e.config.Exporters.FluentHost,
 			FluentPort:             e.config.Exporters.FluentPort,
+			MaxRetry:               1, // Change me
+			MarshalAsJSON:          true,
 			Async:                  true,
 			AsyncReconnectInterval: 500,
 		})
