@@ -3,6 +3,7 @@ package fluentd
 import (
 	"errors"
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -24,9 +25,17 @@ var _ exporters.Exporter = new(FluentdExporter)
 
 // TODO: Change struct fields according to geneva mds log reqs
 type Log struct {
-	Event string            `msg:"eventName"`
-	Meta  map[string]string `msg:"meta"`
-	Value interface{}       `msg:"value"`
+	Namespace     string            `msg:"eventGroup"`
+	Event         string            `msg:"eventName"`
+	GnmiPath      string            `msg:"gnmiPath"`
+	SubscribePath string            `msg:"subscribePath"`
+	Value         interface{}       `msg:"value"`
+	Meta          map[string]string `msg:"meta"`
+	FabricID      string            `msg:"fabricId"`
+	RackID        string            `msg:"rackId"`
+	DeviceID      string            `msg:"deviceId"`
+	DeviceName    string            `msg:"deviceName"`
+	Timestamp     string            `msg:"gnmiTimestamp"`
 }
 
 func init() {
@@ -63,21 +72,23 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 
 		log.Value = value
 
-		path := utils.GetTrimmedPath(notification.Prefix, update.Path)
+		notificationPath := utils.GetTrimmedPath(notification.Prefix, update.Path)
 
 		elems, keys, err := extractPrefixAndPathKeys(notification.GetPrefix(), update.GetPath())
 		if err != nil {
-			e.config.Log.Info().Msg(fmt.Sprintf("Failed to extract path or keys: %s", err))
+			e.config.Log.Info().Msg(fmt.Sprintf("Failed to extract notificationPath or keys: %s", err))
 		}
 
 		if log.Event == "" {
-			measurementPath := strings.Join(elems, "/")
+			subscribePath := strings.Join(elems, "/")
 
 			p := notification.GetPrefix()
 			target := p.GetTarget()
 			origin := p.GetOrigin()
 
-			keys["path"] = measurementPath
+			log.SubscribePath = subscribePath
+			log.GnmiPath = getPathWithKeys(*update.Path)
+
 			if origin != "" {
 				keys["origin"] = origin
 			}
@@ -86,14 +97,37 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 				keys["target"] = target
 			}
 
-			log.Event = pathToMetricName(measurementPath)
+			log.Event = notificationPathToMetricName(subscribePath)
 
 			log.Meta = keys
 
 			if e.connMgr != nil {
-				targetConfig, found := (*e.connMgr).GetTargetConfig(log.Meta["target"])
+				targetName := log.Meta["target"]
+				targetConfig, found := (*e.connMgr).GetTargetConfig(targetName)
 
 				if found {
+					deviceID, exists := targetConfig.Meta["deviceID"]
+					if exists {
+						log.DeviceID = deviceID
+						log.DeviceName = path.Base(deviceID)
+					} else {
+						e.config.Log.Error().Msg("Device ARM ID is not set in the metadata of target: " + targetName)
+						return
+					}
+
+					log.RackID, exists = targetConfig.Meta["rackID"]
+					if !exists {
+						e.config.Log.Error().Msg("Rack ARM ID is not set in the metadata of target: " + targetName)
+						return
+					}
+
+					log.FabricID, exists = targetConfig.Meta["fabricID"]
+					if !exists {
+						e.config.Log.Error().Msg("Fabric ARM ID is not set in the metadata of target: " + targetName)
+						return
+					}
+
+					// Used for aditional metadata fields
 					for _, fieldName := range e.config.ExporterMetadataAllowlist {
 						fieldVal, exists := targetConfig.Meta[fieldName]
 						if exists {
@@ -112,11 +146,15 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 			return
 		}
 
-		// TODO: add flag to mage timestamp optional
 		// ns since epoch
-		log.Meta["timestamp"] = strconv.FormatInt(notification.Timestamp, 10)
+		log.Timestamp = strconv.FormatInt(notification.Timestamp, 10)
 
-		notificationType := e.config.GetPathMetadata(path)["type"]
+		log.Namespace = e.config.GetPathMetadata(notificationPath)["Namespace"]
+		if log.Namespace == "" {
+			log.Namespace = "Default"
+		}
+
+		notificationType := e.config.GetPathMetadata(notificationPath)["type"]
 		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
 
 		if e.fluentLogger != nil && (notificationType == LogType || notificationType == LoggedMetricType) {
@@ -158,7 +196,7 @@ func (e *FluentdExporter) Start(connMgr *connections.ConnectionManager) error {
 	return err
 }
 
-func pathToMetricName(metricPath string) string {
+func notificationPathToMetricName(metricPath string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(metricPath, "/", "_"), "-", "_")
 }
 
@@ -176,8 +214,19 @@ func extractPrefixAndPathKeys(prefix *gnmipb.Path, metricPath *gnmipb.Path) ([]s
 	}
 
 	if len(elems) == 0 {
-		return elems, keys, errors.New("path contains no elems")
+		return elems, keys, errors.New("notificationPath contains no elems")
 	}
 
 	return elems, keys, nil
+}
+
+func getPathWithKeys(path gnmipb.Path) string {
+	result := ""
+	for _, elem := range path.Elem {
+		result += "/" + elem.Name
+		for key, val := range elem.GetKey() {
+			result += "[" + key + "=" + val + "]"
+		}
+	}
+	return result
 }
