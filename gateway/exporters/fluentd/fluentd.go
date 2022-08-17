@@ -23,7 +23,6 @@ const LoggedMetricType = "loggedMetric"
 
 var _ exporters.Exporter = new(FluentdExporter)
 
-// TODO: Change struct fields according to geneva mds log reqs
 type Log struct {
 	Namespace     string            `msg:"eventGroup"`
 	Event         string            `msg:"eventName"`
@@ -161,10 +160,6 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 			if err := e.fluentLogger.Post(log.Event, log); err != nil {
 				e.config.Log.Error().Msg("failed emmiting event log to fluentd: " + err.Error())
 			}
-			// Remove me
-			//  else {
-			// 	e.config.Log.Debug().Msgf("Logged: [ %s ] : [ %v ]", log.Event, log)
-			// }
 		}
 	}
 }
@@ -186,7 +181,6 @@ func (e *FluentdExporter) Start(connMgr *connections.ConnectionManager) error {
 		e.fluentLogger, err = fluent.New(fluent.Config{
 			FluentHost:             e.config.Exporters.FluentHost,
 			FluentPort:             e.config.Exporters.FluentPort,
-			MaxRetry:               1, // Change me
 			MarshalAsJSON:          true,
 			Async:                  true,
 			AsyncReconnectInterval: 500,
