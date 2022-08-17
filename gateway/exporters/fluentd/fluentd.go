@@ -24,15 +24,16 @@ const LoggedMetricType = "loggedMetric"
 var _ exporters.Exporter = new(FluentdExporter)
 
 type Log struct {
-	Namespace     string            `msg:"eventGroup"`
+	Namespace     string            `msg:"eventNamespace"`
 	Event         string            `msg:"eventName"`
 	GnmiPath      string            `msg:"gnmiPath"`
-	SubscribePath string            `msg:"subscribePath"`
+	SubscribePath string            `msg:"subscribedPath"`
 	Value         interface{}       `msg:"value"`
 	Meta          map[string]string `msg:"meta"`
 	FabricID      string            `msg:"fabricId"`
 	RackID        string            `msg:"rackId"`
 	DeviceID      string            `msg:"deviceId"`
+	ExtensionID   string            `msg:"extensionId"`
 	DeviceName    string            `msg:"deviceName"`
 	Timestamp     string            `msg:"gnmiTimestamp"`
 }
@@ -125,6 +126,8 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 						e.config.Log.Error().Msg("Fabric ARM ID is not set in the metadata of target: " + targetName)
 						return
 					}
+
+					log.ExtensionID = e.config.Exporters.ExtensionArmId
 
 					// Used for aditional metadata fields
 					for _, fieldName := range e.config.ExporterMetadataAllowlist {
