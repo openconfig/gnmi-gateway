@@ -17,15 +17,14 @@ import (
 )
 
 const Name = "fluentd"
-const MetricType = "log"
 const LogType = "log"
 const LoggedMetricType = "loggedMetric"
 
 var _ exporters.Exporter = new(FluentdExporter)
 
-type Log struct {
+type LogEntry struct {
 	Namespace     string            `msg:"eventNamespace"`
-	Event         string            `msg:"eventName"`
+	EventName     string            `msg:"eventName"`
 	GnmiPath      string            `msg:"gnmiPath"`
 	SubscribePath string            `msg:"subscribedPath"`
 	Value         interface{}       `msg:"value"`
@@ -62,7 +61,15 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 	notification := leaf.Value().(*gnmipb.Notification)
 
 	for _, update := range notification.Update {
-		log := Log{}
+		notificationPath := utils.GetTrimmedPath(notification.Prefix, update.Path)
+		notificationType := e.config.GetPathMetadata(notificationPath)["type"]
+		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
+
+		if e.fluentLogger == nil || (notificationType != LogType && notificationType != LoggedMetricType) {
+			continue
+		}
+
+		logEntry := LogEntry{}
 
 		value, valid := utils.GetValues(update.Val)
 
@@ -70,99 +77,91 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 			continue
 		}
 
-		log.Value = value
-
-		notificationPath := utils.GetTrimmedPath(notification.Prefix, update.Path)
+		logEntry.Value = value
 
 		elems, keys, err := extractPrefixAndPathKeys(notification.GetPrefix(), update.GetPath())
 		if err != nil {
 			e.config.Log.Info().Msg(fmt.Sprintf("Failed to extract notificationPath or keys: %s", err))
 		}
 
-		if log.Event == "" {
-			subscribePath := strings.Join(elems, "/")
+		subscribePath := strings.Join(elems, "/")
 
-			p := notification.GetPrefix()
-			target := p.GetTarget()
-			origin := p.GetOrigin()
+		p := notification.GetPrefix()
+		target := p.GetTarget()
+		origin := p.GetOrigin()
 
-			log.SubscribePath = subscribePath
-			log.GnmiPath = getPathWithKeys(*update.Path)
+		logEntry.SubscribePath = subscribePath
+		logEntry.GnmiPath = getPathWithKeys(*update.Path)
 
-			if origin != "" {
-				keys["origin"] = origin
-			}
+		if origin != "" {
+			keys["origin"] = origin
+		}
 
-			if target != "" {
-				keys["target"] = target
-			}
+		if target != "" {
+			keys["target"] = target
+		}
 
-			log.Event = notificationPathToMetricName(subscribePath)
+		logEntry.EventName = notificationPathToMetricName(subscribePath)
 
-			log.Meta = keys
+		logEntry.Meta = keys
 
-			if e.connMgr != nil {
-				targetName := log.Meta["target"]
-				targetConfig, found := (*e.connMgr).GetTargetConfig(targetName)
+		if e.connMgr != nil {
+			targetName := logEntry.Meta["target"]
+			targetConfig, found := (*e.connMgr).GetTargetConfig(targetName)
 
-				if found {
-					deviceID, exists := targetConfig.Meta["deviceID"]
-					if exists {
-						log.DeviceID = deviceID
-						log.DeviceName = path.Base(deviceID)
-					} else {
-						e.config.Log.Error().Msg("Device ARM ID is not set in the metadata of target: " + targetName)
-						return
-					}
-
-					log.RackID, exists = targetConfig.Meta["rackID"]
-					if !exists {
-						e.config.Log.Error().Msg("Rack ARM ID is not set in the metadata of target: " + targetName)
-						return
-					}
-
-					log.FabricID, exists = targetConfig.Meta["fabricID"]
-					if !exists {
-						e.config.Log.Error().Msg("Fabric ARM ID is not set in the metadata of target: " + targetName)
-						return
-					}
-
-					log.ExtensionID = e.config.Exporters.ExtensionArmId
-
-					// Used for aditional metadata fields
-					for _, fieldName := range e.config.ExporterMetadataAllowlist {
-						fieldVal, exists := targetConfig.Meta[fieldName]
-						if exists {
-							log.Meta[fieldName] = fieldVal
-						}
-					}
+			if found {
+				deviceID, exists := targetConfig.Meta["deviceID"]
+				if exists {
+					logEntry.DeviceID = deviceID
+					logEntry.DeviceName = path.Base(deviceID)
 				} else {
-					e.config.Log.Error().Msg("Target config not found for target: " + log.Meta["target"])
+					e.config.Log.Error().Msg("Device ARM ID is not set in the metadata of target: " + targetName)
 					return
 				}
+
+				logEntry.RackID, exists = targetConfig.Meta["rackID"]
+				if !exists {
+					e.config.Log.Error().Msg("Rack ARM ID is not set in the metadata of target: " + targetName)
+					return
+				}
+
+				logEntry.FabricID, exists = targetConfig.Meta["fabricID"]
+				if !exists {
+					e.config.Log.Error().Msg("Fabric ARM ID is not set in the metadata of target: " + targetName)
+					return
+				}
+
+				logEntry.ExtensionID = e.config.Exporters.ExtensionArmId
+
+				// TODO: Handle possible duplicates
+				// Used for aditional metadata fields
+				for _, fieldName := range e.config.ExporterMetadataAllowlist {
+					fieldVal, exists := targetConfig.Meta[fieldName]
+					if exists {
+						logEntry.Meta[fieldName] = fieldVal
+					}
+				}
+			} else {
+				e.config.Log.Error().Msg("Target config not found for target: " + logEntry.Meta["target"])
+				return
 			}
 		}
 
-		if log.Event == "" {
+		if logEntry.EventName == "" {
 			e.config.Log.Info().Msg("Point event is empty. Returning.")
 			return
 		}
 
 		// ns since epoch
-		log.Timestamp = strconv.FormatInt(notification.Timestamp, 10)
+		logEntry.Timestamp = strconv.FormatInt(notification.Timestamp, 10)
 
-		log.Namespace = e.config.GetPathMetadata(notificationPath)["Namespace"]
-		if log.Namespace == "" {
-			log.Namespace = "Default"
+		logEntry.Namespace = e.config.GetPathMetadata(notificationPath)["Namespace"]
+		if logEntry.Namespace == "" {
+			logEntry.Namespace = "Default"
 		}
 
-		notificationType := e.config.GetPathMetadata(notificationPath)["type"]
-		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
-
-		if e.fluentLogger != nil && (notificationType == LogType || notificationType == LoggedMetricType) {
-			if err := e.fluentLogger.Post(log.Event, log); err != nil {
-				e.config.Log.Error().Msg("failed emmiting event log to fluentd: " + err.Error())
-			}
+		if err := e.fluentLogger.Post(logEntry.Namespace, logEntry); err != nil {
+			e.config.Log.Error().Msg("failed emmiting event log to fluentd: " + err.Error())
 		}
 	}
 }

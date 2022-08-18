@@ -53,7 +53,6 @@ func TestStatsdExporter_Name(t *testing.T) {
 }
 
 func TestStatsdExporter_Export(t *testing.T) {
-	os.Setenv("ZOOKEEPER_HOSTS", "172.17.0.2")
 	config.ZookeeperHosts = []string{os.Getenv("ZOOKEEPER_HOSTS")}
 	connMgr, err := createZKTargets(t)
 	assert.Nil(t, err)
