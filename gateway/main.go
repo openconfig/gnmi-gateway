@@ -110,7 +110,11 @@ func ParseArgs(config *configuration.GatewayConfig) error {
 
 	exporterMetadataAllowlist := flag.String("ExportersMetadataAllowlist", "", "Comma separated (no spaces) list of metadata fields to include in notifications")
 
-	flag.StringVar(&config.Exporters.StatsdHost, "ExportersStatsdHost", "", "Statsd exporter host including port")
+	flag.StringVar(&config.Exporters.StatsdHost, "ExportersStatsdHost", "", "Geneva exporter statsd host including port")
+	flag.StringVar(&config.Exporters.FluentHost, "ExportersFluentHost", "", "Geneva exporter fluentd host address")
+	flag.IntVar(&config.Exporters.FluentPort, "ExportersFluentPort", 8130, "Geneva exporter fluentd host port")
+	flag.StringVar(&config.Exporters.GenevaMdmAccount, "ExportersMdmAccount", "", "Geneva exporter MDM account")
+	flag.StringVar(&config.Exporters.ExtensionArmId, "ExportersExtensionArmId", "", "ARM ID of the Azure extension of which gnmi-gateway is part of")
 
 	flag.Uint64Var(&config.GatewayTransitionBufferSize, "GatewayTransitionBufferSize", 100000, "Tunes the size of the buffer between targets and exporters/clients")
 	flag.BoolVar(&config.LogCaller, "LogCaller", false, "Include the file and line number with each log message")

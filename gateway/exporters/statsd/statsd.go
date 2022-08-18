@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cactus/go-statsd-client/v5/statsd"
@@ -15,16 +14,18 @@ import (
 	"github.com/openconfig/gnmi-gateway/gateway/exporters"
 	"github.com/openconfig/gnmi-gateway/gateway/utils"
 	"github.com/openconfig/gnmi/ctree"
-	"github.com/openconfig/gnmi/proto/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 const Name = "statsd"
+const MetricType = "metric"
+const LogType = "log"
+const LoggedMetricType = "loggedMetric"
 
 var _ exporters.Exporter = new(StatsdExporter)
 
 type Metric struct {
-	Account     string            `json:"Account"`
+	Account     string            `json:",omitempty"`
 	Measurement string            `json:"Metric"`
 	Namespace   string            `json:"Namespace"`
 	Dims        map[string]string `json:"Dims"`
@@ -69,6 +70,7 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		timestamp := time.Unix(0, notification.Timestamp)
 		beforeLimit := (time.Now()).Add(-30 * time.Minute)
 		afterLimit := (time.Now()).Add(4 * time.Minute)
+		//TODO Check if Geneva has timestamp limitations
 
 		if timestamp.Before(beforeLimit) || timestamp.After(afterLimit) {
 			return
@@ -83,8 +85,9 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		metric.Value = value
-		metric.Namespace = e.config.GetPathMetadata(utils.GetTrimmedPath(notification.Prefix, update.Path))["Namespace"]
 
+		path := utils.GetTrimmedPath(notification.Prefix, update.Path)
+		metric.Namespace = e.config.GetPathMetadata(path)["Namespace"]
 		if metric.Namespace == "" {
 			metric.Namespace = "Default"
 		}
@@ -141,38 +144,32 @@ func (e *StatsdExporter) Export(leaf *ctree.Leaf) {
 		}
 
 		metric.Dims = point.Tags
-		metric.Account = metric.Dims["Account"]
-		delete(metric.Dims, "Account")
 		// ns since epoch
 		metric.Dims["timestamp"] = strconv.FormatInt(notification.Timestamp, 10)
 
+		notificationType := e.config.GetPathMetadata(path)["type"]
+		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
+		if notificationType == "" || notificationType == MetricType || notificationType == LoggedMetricType {
+			metric.Account = e.config.Exporters.GenevaMdmAccount
 
-		metricJSON, err := json.Marshal(metric)
-
-		if err != nil {
-			e.config.Log.Error().Msg("Failed to marshal point into JSON")
-			return
-		}
-
-		if err != nil {
-			e.config.Log.Error().Msg(err.Error())
-			return
-		}
-
-		val, isNumericValue := utils.GetNumberValues(update.Val)
-		if isNumericValue {
-			e.config.Log.Debug().Msgf("%s:%d|g", string(metricJSON), int64(val))
-			if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
+			if resourceId := e.config.Exporters.ExtensionArmId; resourceId != "" {
+				metric.Dims["microsoft.resourceid"] = resourceId
 			}
-		} else if reflect.TypeOf(metric.Value) == reflect.TypeOf((*gnmi.TypedValue_StringVal)(nil)) {
-			e.config.Log.Debug().Msgf("%s:%s|s", string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal))
 
-			if err := e.client.Set(string(metricJSON), string(metric.Value.(*gnmi.TypedValue_StringVal).StringVal), 1); err != nil {
-				e.config.Log.Error().Msg(err.Error())
+			metricJSON, err := json.Marshal(metric)
+
+			if err != nil {
+				e.config.Log.Error().Msg("Failed to marshal point into JSON")
+				return
 			}
-		} else {
-			e.config.Log.Debug().Msgf("Received metric of type: %s", reflect.TypeOf(metric.Value).String())
+
+			val, isNumericValue := utils.GetNumberValues(update.Val)
+			if isNumericValue {
+				e.config.Log.Debug().Msgf("%s:%d|g", string(metricJSON), int64(val))
+				if err := e.client.Gauge(string(metricJSON), int64(val), 1); err != nil {
+					e.config.Log.Error().Msg(err.Error())
+				}
+			}
 		}
 	}
 }
@@ -184,17 +181,26 @@ func (e *StatsdExporter) Start(connMgr *connections.ConnectionManager) error {
 	e.connMgr = connMgr
 
 	var err error
+
+	// TODO: Resolve deprecated
 	e.client, err = statsd.NewBufferedClient(
 		e.config.Exporters.StatsdHost, "",
-		time.Duration(300) * time.Millisecond, // flush interval
-		0, // flush size - default
+		time.Duration(300)*time.Millisecond, // flush interval
+		0,                                   // flush size - default
 	)
+
+	if e.config.Exporters.GenevaMdmAccount == "" {
+		e.config.Log.Warn().Msg("geneva MDM account is not set in exporter; metrics will be discarded by the MDM agent")
+	}
+	if e.config.Exporters.ExtensionArmId == "" {
+		e.config.Log.Warn().Msg("extension ARM ID is not set in Geneva exporter; metrics will be discarded by the MDM agent")
+	}
 
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return err
 }
 
 func pathToMetricName(metricPath string) string {
@@ -208,19 +214,14 @@ func extractPrefixAndPathKeys(prefix *gnmipb.Path, metricPath *gnmipb.Path) ([]s
 		for _, e := range metricPath.Elem {
 			name := e.Name
 			elems = append(elems, name)
-
 			for k, v := range e.GetKey() {
-				if _, ok := keys[k]; ok {
-					keys[name+"/"+k] = v
-				} else {
-					keys[k] = v
-				}
+				keys[e.Name+"_"+k] = v
 			}
 		}
 	}
 
 	if len(elems) == 0 {
-		return elems, keys, errors.New("Path contains no elems")
+		return elems, keys, errors.New("path contains no elems")
 	}
 
 	return elems, keys, nil

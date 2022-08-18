@@ -26,6 +26,12 @@ require (
 )
 
 require (
+	github.com/fluent/fluent-logger-golang v1.9.0 // indirect
+	github.com/philhofer/fwd v1.1.1 // indirect
+	github.com/tinylib/msgp v1.1.6 // indirect
+)
+
+require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535 // indirect
