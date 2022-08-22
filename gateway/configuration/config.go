@@ -163,6 +163,8 @@ type ExportersConfig struct {
 	FluentHost string `json:"fluent_host"`
 	// FluentPort is the target port for the fluentd target
 	FluentPort int `json:"fluent_port"`
+	// FluentMarshalJSON specifies if the output of the fluentd exporter shall be marshalled as JSON
+	FluentMarshalJSON bool `json:"fluent_marshal_json"`
 	// GenevaMdmAccount is the corresponding MDM account for pushing metrics into Geneva
 	GenevaMdmAccount string `json:"geneva_mdm_account"`
 	// ExtensionArmId is the ARM ID of the Azure extension of which gnmi-gateway is part of (if needed)

@@ -63,9 +63,14 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 	for _, update := range notification.Update {
 		notificationPath := utils.GetTrimmedPath(notification.Prefix, update.Path)
 		notificationType := e.config.GetPathMetadata(notificationPath)["type"]
-		e.config.Log.Debug().Msgf("Notification type: [ %s ]", notificationType)
 
-		if e.fluentLogger == nil || (notificationType != LogType && notificationType != LoggedMetricType) {
+		if e.fluentLogger == nil {
+			e.config.Log.Debug().Msg("fluentd client is unset")
+			continue
+		}
+
+		if notificationType != LogType && notificationType != LoggedMetricType {
+			e.config.Log.Debug().Msgf("received notification without log type. received %s", notificationType)
 			continue
 		}
 
@@ -160,6 +165,7 @@ func (e *FluentdExporter) Export(leaf *ctree.Leaf) {
 			logEntry.Namespace = "Default"
 		}
 
+		e.config.Log.Debug().Msgf("Log entry: %v", logEntry)
 		if err := e.fluentLogger.Post(logEntry.Namespace, logEntry); err != nil {
 			e.config.Log.Error().Msg("failed emmiting event log to fluentd: " + err.Error())
 		}
@@ -183,10 +189,12 @@ func (e *FluentdExporter) Start(connMgr *connections.ConnectionManager) error {
 		e.fluentLogger, err = fluent.New(fluent.Config{
 			FluentHost:             e.config.Exporters.FluentHost,
 			FluentPort:             e.config.Exporters.FluentPort,
-			MarshalAsJSON:          true,
+			MarshalAsJSON:          e.config.Exporters.FluentMarshalJSON,
 			Async:                  true,
 			AsyncReconnectInterval: 500,
 		})
+	} else {
+		return errors.New("fluentd exporter was selected, but no fluentd host was provided")
 	}
 
 	return err
