@@ -15,7 +15,6 @@ CMD ["./gnmi-gateway", \
     "-TargetLoaders=json", \
     "-TargetJSONFile=./targets.json", \
     "-EnableGNMIServer", \
-    "-Exporters=debug", \ 
     "-OpenConfigDirectory=./oc-models/", \ 
     "-ServerTLSCert=server.crt", \
     "-ServerTLSKey=server.key"]
