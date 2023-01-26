@@ -14,6 +14,7 @@ RUN ./gnmi-gateway -version
 CMD ["./gnmi-gateway", \
     "-TargetLoaders=json", \
     "-TargetJSONFile=./targets.json", \
+    "-TargetLimit=300" \
     "-EnableGNMIServer", \
     "-OpenConfigDirectory=./oc-models/", \ 
     "-ServerTLSCert=server.crt", \
