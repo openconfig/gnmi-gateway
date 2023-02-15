@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 // Copyright 2020 Netflix Inc
@@ -26,8 +27,8 @@ import (
 	"github.com/go-zookeeper/zk"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openconfig/gnmi-gateway/gateway/clustering"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/mspiez/gnmi-gateway/gateway/clustering"
+	"github.com/mspiez/gnmi-gateway/gateway/configuration"
 )
 
 const ZookeeperIntegrationServerAddress = "127.0.0.1:2181"

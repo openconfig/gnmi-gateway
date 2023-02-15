@@ -20,7 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openconfig/gnmi-gateway/gateway/locking"
+	"github.com/mspiez/gnmi-gateway/gateway/locking"
 )
 
 func TestNonBlockingLock_Try(t *testing.T) {

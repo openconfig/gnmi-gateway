@@ -1,8 +1,8 @@
-[![Release](https://img.shields.io/github/release/openconfig/gnmi-gateway.svg)](https://github.com/openconfig/gnmi-gateway/releases/latest)
-[![Testing](https://github.com/openconfig/gnmi-gateway/workflows/Testing/badge.svg?branch=release)](https://github.com/openconfig/gnmi-gateway/actions?query=workflow%3ATesting+branch%3Arelease)
+[![Release](https://img.shields.io/github/release/openconfig/gnmi-gateway.svg)](https://github.com/mspiez/gnmi-gateway/releases/latest)
+[![Testing](https://github.com/mspiez/gnmi-gateway/workflows/Testing/badge.svg?branch=release)](https://github.com/mspiez/gnmi-gateway/actions?query=workflow%3ATesting+branch%3Arelease)
 [![Go Report Card](https://goreportcard.com/badge/github.com/openconfig/gnmi-gateway)](https://goreportcard.com/report/github.com/openconfig/gnmi-gateway)
-[![License](https://img.shields.io/github/license/openconfig/gnmi-gateway.svg)](https://github.com/openconfig/gnmi-gateway/blob/release/LICENSE)
-[![GoDoc](https://godoc.org/github.com/openconfig/gnmi-gateway/gateway?status.svg)](https://godoc.org/github.com/openconfig/gnmi-gateway/gateway)
+[![License](https://img.shields.io/github/license/openconfig/gnmi-gateway.svg)](https://github.com/mspiez/gnmi-gateway/blob/release/LICENSE)
+[![GoDoc](https://godoc.org/github.com/mspiez/gnmi-gateway/gateway?status.svg)](https://godoc.org/github.com/mspiez/gnmi-gateway/gateway)
 
 ⚠ Experimental. Please take note that this is a pre-release version.
 
@@ -224,7 +224,7 @@ GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info ./gnmi-gateway
 [1]: https://github.com/openconfig/gnmi
 [2]: https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md#35-subscribing-to-telemetry-updates
 [3]: https://zookeeper.apache.org/
-[4]: https://github.com/openconfig/gnmi-gateway/issues
+[4]: https://github.com/mspiez/gnmi-gateway/issues
 [5]: https://github.com/openconfig/public/tree/master/release
 [6]: https://github.com/openconfig/gnmi/blob/master/proto/target/target.proto
 [7]: https://github.com/openconfig/gnmi/blob/master/cache/cache.go#L143

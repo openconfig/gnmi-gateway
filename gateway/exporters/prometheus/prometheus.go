@@ -28,10 +28,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi-gateway/gateway/exporters"
-	"github.com/openconfig/gnmi-gateway/gateway/openconfig"
-	"github.com/openconfig/gnmi-gateway/gateway/utils"
+	"github.com/mspiez/gnmi-gateway/gateway/configuration"
+	"github.com/mspiez/gnmi-gateway/gateway/exporters"
+	"github.com/mspiez/gnmi-gateway/gateway/openconfig"
+	"github.com/mspiez/gnmi-gateway/gateway/utils"
 )
 
 const Name = "prometheus"

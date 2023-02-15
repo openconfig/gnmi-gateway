@@ -21,9 +21,9 @@ import (
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/proto/target"
 
-	"github.com/openconfig/gnmi-gateway/gateway/clustering"
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi-gateway/gateway/connections"
+	"github.com/mspiez/gnmi-gateway/gateway/clustering"
+	"github.com/mspiez/gnmi-gateway/gateway/configuration"
+	"github.com/mspiez/gnmi-gateway/gateway/connections"
 )
 
 // ClusterTargetLoader is used internally to connect/disconnect from other

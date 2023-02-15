@@ -1,8 +1,8 @@
 VERSION := "$(shell git describe --tags)-$(shell git rev-parse --short HEAD)"
 BUILDTIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-GOLDFLAGS += -X github.com/openconfig/gnmi-gateway/gateway.Version=$(VERSION)
-GOLDFLAGS += -X github.com/openconfig/gnmi-gateway/gateway.Buildtime=$(BUILDTIME)
+GOLDFLAGS += -X github.com/mspiez/gnmi-gateway/gateway.Version=$(VERSION)
+GOLDFLAGS += -X github.com/mspiez/gnmi-gateway/gateway.Buildtime=$(BUILDTIME)
 GOFLAGS = -ldflags "$(GOLDFLAGS)"
 
 .PHONY: build release

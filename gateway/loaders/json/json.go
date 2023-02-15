@@ -24,9 +24,9 @@ import (
 	targetpb "github.com/openconfig/gnmi/proto/target"
 	"github.com/openconfig/gnmi/target"
 
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi-gateway/gateway/connections"
-	"github.com/openconfig/gnmi-gateway/gateway/loaders"
+	"github.com/mspiez/gnmi-gateway/gateway/configuration"
+	"github.com/mspiez/gnmi-gateway/gateway/connections"
+	"github.com/mspiez/gnmi-gateway/gateway/loaders"
 )
 
 var _ loaders.TargetLoader = new(JSONFileTargetLoader)

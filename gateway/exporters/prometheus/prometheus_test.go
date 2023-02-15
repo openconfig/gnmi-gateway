@@ -16,19 +16,20 @@
 package prometheus
 
 import (
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	"github.com/openconfig/gnmi/cache"
-	"github.com/openconfig/gnmi/ctree"
-	pb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"math/rand"
 	"strconv"
 	"testing"
 
+	"github.com/mspiez/gnmi-gateway/gateway/configuration"
+	"github.com/openconfig/gnmi/cache"
+	"github.com/openconfig/gnmi/ctree"
+	pb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
 	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openconfig/gnmi-gateway/gateway/exporters"
+	"github.com/mspiez/gnmi-gateway/gateway/exporters"
 )
 
 var _ exporters.Exporter = new(PrometheusExporter)

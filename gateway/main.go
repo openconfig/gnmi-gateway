@@ -28,9 +28,9 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
-	_ "github.com/openconfig/gnmi-gateway/gateway/exporters/all"
-	_ "github.com/openconfig/gnmi-gateway/gateway/loaders/all"
+	"github.com/mspiez/gnmi-gateway/gateway/configuration"
+	_ "github.com/mspiez/gnmi-gateway/gateway/exporters/all"
+	_ "github.com/mspiez/gnmi-gateway/gateway/loaders/all"
 )
 
 // Main is the entry point for the command-line and it's a good example of how to call StartGateway but

@@ -15,8 +15,36 @@
 
 package main
 
-import "github.com/openconfig/gnmi-gateway/gateway"
+import (
+	"context"
+	"log"
+	"os"
+	"time"
+
+	"github.com/mspiez/gnmi-gateway/gateway"
+	"github.com/mspiez/nautobot-go-client/nautobot"
+)
 
 func main() {
 	gateway.Main()
+	token := os.Getenv("NAUTOBOT_TOKEN")
+	baseUrl := os.Getenv("NAUTOBOT_URL")
+
+	// optionalFields := nautobot.OptionalFilter{"slug__ic", "site"}
+
+	ctx := context.Background()
+	timeout := 30 * time.Second
+	reqContext, _ := context.WithTimeout(ctx, timeout)
+
+	newClient := nautobot.NewClient(
+		nautobot.WithToken(token),
+		nautobot.WithBaseURL(baseUrl),
+		nautobot.WithOffset(-1),
+		// nautobot.WithRetries(1),
+	)
+	err := newClient.DeleteInterfaceStatus(reqContext, "r2__ethernet4")
+
+	if err != nil {
+		log.Fatal(err)
+	}
 }

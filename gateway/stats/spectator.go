@@ -21,7 +21,7 @@ import (
 
 	"github.com/Netflix/spectator-go"
 
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/mspiez/gnmi-gateway/gateway/configuration"
 )
 
 var Registry *spectator.Registry

@@ -20,7 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/mspiez/gnmi-gateway/gateway/configuration"
 )
 
 const TestData = `

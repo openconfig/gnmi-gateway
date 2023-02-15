@@ -22,7 +22,7 @@ import (
 
 	"github.com/go-zookeeper/zk"
 
-	"github.com/openconfig/gnmi-gateway/gateway/configuration"
+	"github.com/mspiez/gnmi-gateway/gateway/configuration"
 )
 
 const ClusterMemberPath = "/members"
