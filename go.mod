@@ -8,9 +8,9 @@ require (
 	github.com/frankban/quicktest v1.11.1 // indirect
 	github.com/go-zookeeper/zk v1.0.2
 	github.com/golang/mock v1.4.3
-	github.com/golang/protobuf v1.4.2
+	github.com/golang/protobuf v1.5.0
 	github.com/google/gnxi v0.0.0-20200831120455-017df4756f78
-	github.com/google/go-cmp v0.5.2
+	github.com/google/go-cmp v0.5.5
 	github.com/influxdata/influxdb-client-go/v2 v2.2.3
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/netbox-community/go-netbox v0.0.0-20201002085217-91e5d561efe4
@@ -24,6 +24,6 @@ require (
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/grpc v1.37.0
-	google.golang.org/protobuf v1.25.1-0.20200805231151-a709e31e5d12 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0
 )
